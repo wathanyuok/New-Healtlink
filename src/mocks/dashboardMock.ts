@@ -23,16 +23,16 @@ export const MOCK_HOSPITAL_SUB_TYPES = [
 ];
 
 export const MOCK_HOSPITALS = [
-  { id: 1, name: "รพ.ราชวิถี", affiliation: "กรมการแพทย์", serviceLevel: "ตติยภูมิ", hospitalZoneId: 1, hospitalSubTypeId: 1 },
-  { id: 2, name: "รพ.ศิริราช", affiliation: "มหาวิทยาลัย", serviceLevel: "ตติยภูมิ", hospitalZoneId: 1, hospitalSubTypeId: 1 },
-  { id: 3, name: "รพ.จุฬาลงกรณ์", affiliation: "สภากาชาดไทย", serviceLevel: "ตติยภูมิ", hospitalZoneId: 2, hospitalSubTypeId: 1 },
-  { id: 4, name: "รพ.พระมงกุฎเกล้า", affiliation: "กองทัพบก", serviceLevel: "ตติยภูมิ", hospitalZoneId: 2, hospitalSubTypeId: 1 },
-  { id: 5, name: "รพ.ตากสิน", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", hospitalZoneId: 3, hospitalSubTypeId: 2 },
-  { id: 6, name: "รพ.เจริญกรุงประชารักษ์", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", hospitalZoneId: 3, hospitalSubTypeId: 2 },
-  { id: 7, name: "รพ.หลวงพ่อทวีศักดิ์", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", hospitalZoneId: 4, hospitalSubTypeId: 2 },
-  { id: 8, name: "รพ.ลาดกระบังกรุงเทพมหานคร", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", hospitalZoneId: 5, hospitalSubTypeId: 2 },
-  { id: 9, name: "รพ.สิรินธร", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", hospitalZoneId: 6, hospitalSubTypeId: 2 },
-  { id: 10, name: "ศูนย์บริการสาธารณสุข 1", affiliation: "กทม.", serviceLevel: "ปฐมภูมิ", hospitalZoneId: 7, hospitalSubTypeId: 4 },
+  { id: 1, name: "รพ.ราชวิถี", affiliation: "กรมการแพทย์", serviceLevel: "ตติยภูมิ", zone: { id: 1, name: "โซน 1" }, subType: { id: 1, name: "โรงพยาบาลศูนย์" } },
+  { id: 2, name: "รพ.ศิริราช", affiliation: "มหาวิทยาลัย", serviceLevel: "ตติยภูมิ", zone: { id: 1, name: "โซน 1" }, subType: { id: 1, name: "โรงพยาบาลศูนย์" } },
+  { id: 3, name: "รพ.จุฬาลงกรณ์", affiliation: "สภากาชาดไทย", serviceLevel: "ตติยภูมิ", zone: { id: 2, name: "โซน 2" }, subType: { id: 1, name: "โรงพยาบาลศูนย์" } },
+  { id: 4, name: "รพ.พระมงกุฎเกล้า", affiliation: "กองทัพบก", serviceLevel: "ตติยภูมิ", zone: { id: 2, name: "โซน 2" }, subType: { id: 1, name: "โรงพยาบาลศูนย์" } },
+  { id: 5, name: "รพ.ตากสิน", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", zone: { id: 3, name: "โซน 3" }, subType: { id: 2, name: "โรงพยาบาลทั่วไป" } },
+  { id: 6, name: "รพ.เจริญกรุงประชารักษ์", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", zone: { id: 3, name: "โซน 3" }, subType: { id: 2, name: "โรงพยาบาลทั่วไป" } },
+  { id: 7, name: "รพ.หลวงพ่อทวีศักดิ์", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", zone: { id: 4, name: "โซน 4" }, subType: { id: 2, name: "โรงพยาบาลทั่วไป" } },
+  { id: 8, name: "รพ.ลาดกระบังกรุงเทพมหานคร", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", zone: { id: 5, name: "โซน 5" }, subType: { id: 2, name: "โรงพยาบาลทั่วไป" } },
+  { id: 9, name: "รพ.สิรินธร", affiliation: "กทม.", serviceLevel: "ทุติยภูมิ", zone: { id: 6, name: "โซน 6" }, subType: { id: 2, name: "โรงพยาบาลทั่วไป" } },
+  { id: 10, name: "ศูนย์บริการสาธารณสุข 1", affiliation: "กทม.", serviceLevel: "ปฐมภูมิ", zone: { id: 7, name: "โซน 7" }, subType: { id: 4, name: "คลินิกชุมชนอบอุ่น" } },
 ];
 
 /* ── StatisticReport (getStaticsAndDetails) ── */

@@ -83,7 +83,7 @@ export default function TopAdmissionRateHospital({ role, dashboardType }: Props)
 
       const wb = XLSX.utils.book_new();
       const sheetData: any[][] = [];
-      sheetData.push([exportData.reportTitle || "รายงาน Top 5 สถานพยาบาลปลายทางที่ส่งออกมากที่สุด"]);
+      sheetData.push([exportData.reportTitle || "รายงาน Top 5 สถานพยาบาลที่ส่งต่อผู้ป่วยเข้ามารักษามากที่สุด"]);
       if (exportData.dateRange) sheetData.push([`ช่วงวันที่: ${exportData.dateRange}`]);
       sheetData.push([]);
       sheetData.push(["อันดับ", "ชื่อโรงพยาบาล", "ประเภทโรงพยาบาล", "ระดับบริการ", "สังกัด", "อัตราการยอมรับ", "Refer In", "Refer Out", "Refer Back", "รวม"]);
@@ -109,7 +109,7 @@ export default function TopAdmissionRateHospital({ role, dashboardType }: Props)
     <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, background: GRADIENT, color: "#fff" }}>
         <Typography variant="h6" fontWeight={600}>
-          Top 5 สถานพยาบาลปลายทางที่ส่งออกมากที่สุด
+          Top 5 สถานพยาบาลที่ส่งต่อผู้ป่วยเข้ามารักษามากที่สุด
         </Typography>
         <Button variant="contained" size="small" startIcon={<DownloadIcon />} onClick={downloadExcel}
           sx={{ bgcolor: "#fff", color: "#036246", "&:hover": { bgcolor: "#f0f0f0" }, whiteSpace: "nowrap" }}>
