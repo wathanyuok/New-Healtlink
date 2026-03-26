@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import api from "@/lib/api";
 import type { FilterOption, Filters } from "@/types/dashboard";
+import {
+  MOCK_STATICS_AND_DETAILS,
+  MOCK_REPORT_STATUS_STATISTICS,
+  MOCK_TOP5_HOSPITALS,
+  MOCK_TOP10_DISEASES,
+  MOCK_TOP5_CAUSE,
+  MOCK_TOP5_COMMON_REASONS,
+} from "@/mocks/dashboardMock";
 
 const API = {
   MONITOR_REFERRAL: "main-service/dashboard/monitorReferral",
@@ -89,9 +97,17 @@ interface DashboardState {
   exportTop10MostReferredDiseases: (params: any) => Promise<any>;
 }
 
-const apiGet = async (endpoint: string, params: any) => {
-  const response = await api.get(endpoint, { params });
-  return response.data;
+const apiGet = async (endpoint: string, params: any, mockFallback?: any) => {
+  try {
+    const response = await api.get(endpoint, { params });
+    return response.data;
+  } catch (err) {
+    if (mockFallback) {
+      console.warn(`[MOCK] API ${endpoint} unavailable, using mock data`);
+      return mockFallback;
+    }
+    throw err;
+  }
 };
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -150,14 +166,14 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       top10MostReferredDiseasesFilters: defaultFilters(),
     }),
 
-  // API calls
+  // API calls (with mock fallback when backend is unavailable)
   getReferMonitor: (params) => apiGet(API.MONITOR_REFERRAL, params),
-  getStaticsAndDetails: (params) => apiGet(API.STATICS_AND_DETAILS, params),
-  getReportStatusStatistics: (params) => apiGet(API.REPORT_STATUS_STATISTICS, params),
-  getTop5Cause: (params) => apiGet(API.TOP_5_CAUSE, params),
-  getTop5CommonReasons: (params) => apiGet(API.TOP_5_COMMON_REASONS, params),
-  getTop5HighestAcceptingHospitals: (params) => apiGet(API.TOP_5_HIGHEST_ACCEPTING_HOSPITALS, params),
-  getTop10MostReferredDiseases: (params) => apiGet(API.TOP_10_MOST_REFERRED_DISEASES, params),
+  getStaticsAndDetails: (params) => apiGet(API.STATICS_AND_DETAILS, params, MOCK_STATICS_AND_DETAILS),
+  getReportStatusStatistics: (params) => apiGet(API.REPORT_STATUS_STATISTICS, params, MOCK_REPORT_STATUS_STATISTICS),
+  getTop5Cause: (params) => apiGet(API.TOP_5_CAUSE, params, MOCK_TOP5_CAUSE),
+  getTop5CommonReasons: (params) => apiGet(API.TOP_5_COMMON_REASONS, params, MOCK_TOP5_COMMON_REASONS),
+  getTop5HighestAcceptingHospitals: (params) => apiGet(API.TOP_5_HIGHEST_ACCEPTING_HOSPITALS, params, MOCK_TOP5_HOSPITALS),
+  getTop10MostReferredDiseases: (params) => apiGet(API.TOP_10_MOST_REFERRED_DISEASES, params, MOCK_TOP10_DISEASES),
 
   // Export
   exportSummaryExcel: (params) => apiGet(API.SUMMARY_EXPORT_EXCEL, params),

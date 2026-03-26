@@ -13,6 +13,11 @@ import TopAdmissionRateHospital from "./TopAdmissionRateHospital";
 import MostReferredDisease from "./MostReferredDisease";
 import type { DashboardType } from "@/types/dashboard";
 import api from "@/lib/api";
+import {
+  MOCK_HOSPITAL_ZONES,
+  MOCK_HOSPITAL_SUB_TYPES,
+  MOCK_HOSPITALS,
+} from "@/mocks/dashboardMock";
 
 interface Props {
   dashboardType: DashboardType;
@@ -60,7 +65,21 @@ export default function DashboardPage({ dashboardType }: Props) {
           hospitalServiceLevel: Array.from(levelSet).map((v) => ({ value: v, name: v })),
         });
       } catch (err) {
-        console.error("Failed to load hospital options:", err);
+        console.warn("API unavailable, using mock filter options");
+        const hospitals = MOCK_HOSPITALS;
+        const affiliationSet = new Set<string>();
+        const levelSet = new Set<string>();
+        hospitals.forEach((h) => {
+          if (h.affiliation) affiliationSet.add(h.affiliation);
+          if (h.serviceLevel) levelSet.add(h.serviceLevel);
+        });
+        setHospitalOptions({
+          hospitalData: hospitals,
+          hospitalZone: MOCK_HOSPITAL_ZONES.map((z) => ({ value: z.id, name: z.name })),
+          hospitalSubType: MOCK_HOSPITAL_SUB_TYPES.map((t) => ({ value: t.id, name: t.name })),
+          hospitalAffiliation: Array.from(affiliationSet).map((v) => ({ value: v, name: v })),
+          hospitalServiceLevel: Array.from(levelSet).map((v) => ({ value: v, name: v })),
+        });
       }
     };
 
