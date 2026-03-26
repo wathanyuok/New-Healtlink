@@ -47,6 +47,7 @@ export const MOCK_STATICS_AND_DETAILS = {
       accept: {
         total: 1520,
         percentage: "57.5",
+        opd: 720, ipd: 500, emergency: 300,
         breakdown: {
           opd: 720, ipd: 500, emergency: 300,
           opdPercentage: "47.4", ipdPercentage: "32.9", emergencyPercentage: "19.7",
@@ -55,6 +56,7 @@ export const MOCK_STATICS_AND_DETAILS = {
       reject: {
         total: 380,
         percentage: "14.4",
+        opd: 180, ipd: 120, emergency: 80,
         breakdown: {
           opd: 180, ipd: 120, emergency: 80,
           opdPercentage: "47.4", ipdPercentage: "31.6", emergencyPercentage: "21.1",
@@ -63,6 +65,7 @@ export const MOCK_STATICS_AND_DETAILS = {
       waiting: {
         total: 744,
         percentage: "28.1",
+        opd: 345, ipd: 256, emergency: 143,
         breakdown: {
           opd: 345, ipd: 256, emergency: 143,
           opdPercentage: "46.4", ipdPercentage: "34.4", emergencyPercentage: "19.2",
@@ -75,33 +78,58 @@ export const MOCK_STATICS_AND_DETAILS = {
 /* ── StatisticCharts (getReportStatusStatistics) ── */
 export const MOCK_REPORT_STATUS_STATISTICS = {
   data: {
-    referralTypeChart: [
-      { type: "OPD", referIn: 680, referOut: 565 },
-      { type: "IPD", referIn: 432, referOut: 444 },
-      { type: "ER", referIn: 298, referOut: 225 },
-    ],
-    ageChart: [
-      { range: "0-10", count: 182 },
-      { range: "11-20", count: 245 },
-      { range: "21-30", count: 389 },
-      { range: "31-40", count: 456 },
-      { range: "41-50", count: 512 },
-      { range: "51-60", count: 623 },
-      { range: "61-70", count: 478 },
-      { range: "71-80", count: 312 },
-      { range: "81-90", count: 145 },
-      { range: "91+", count: 42 },
-    ],
-    zoneMatrix: [
-      [0, 45, 12, 8, 32, 15, 22, 10],
-      [38, 0, 25, 18, 14, 9, 28, 16],
-      [15, 22, 0, 35, 20, 42, 11, 7],
-      [10, 18, 30, 0, 25, 15, 20, 12],
-      [28, 12, 16, 22, 0, 35, 18, 24],
-      [20, 8, 38, 12, 30, 0, 14, 22],
-      [18, 25, 10, 16, 14, 20, 0, 32],
-      [12, 15, 8, 20, 22, 18, 28, 0],
-    ],
+    charts: {
+      referralType: {
+        data: [
+          { name: "ส่งออก", value: 1234 },
+          { name: "รับเข้า", value: 1410 },
+          { name: "ส่งกลับ", value: 328 },
+          { name: "รับกลับ", value: 215 },
+        ],
+      },
+      ageGroups: {
+        data: [
+          { name: "0-10", value: 182, percentage: "4.7" },
+          { name: "11-20", value: 245, percentage: "6.3" },
+          { name: "21-30", value: 389, percentage: "10.0" },
+          { name: "31-40", value: 456, percentage: "11.7" },
+          { name: "41-50", value: 512, percentage: "13.2" },
+          { name: "51-60", value: 623, percentage: "16.0" },
+          { name: "61-70", value: 478, percentage: "12.3" },
+          { name: "71-80", value: 312, percentage: "8.0" },
+          { name: "81-90", value: 145, percentage: "3.7" },
+          { name: "91+", value: 42, percentage: "1.1" },
+        ],
+      },
+      departments: {
+        data: [
+          { name: "อายุรกรรม", value: 28.5 },
+          { name: "ศัลยกรรม", value: 22.3 },
+          { name: "กุมารเวชกรรม", value: 15.8 },
+          { name: "สูติ-นรีเวชกรรม", value: 12.4 },
+          { name: "ออร์โธปิดิกส์", value: 10.2 },
+          { name: "จักษุวิทยา", value: 6.5 },
+          { name: "อื่นๆ", value: 4.3 },
+        ],
+      },
+      gender: {
+        data: [
+          { name: "ชาย", value: 1856 },
+          { name: "หญิง", value: 1528 },
+        ],
+      },
+    },
+    tables: {
+      rejectedDepartments: {
+        data: [
+          { name: "อายุรกรรม", hospitalName: "รพ.ราชวิถี", rejectedCount: 45, totalReferIn: 320, rejectionRate: 14.1 },
+          { name: "ศัลยกรรม", hospitalName: "รพ.ศิริราช", rejectedCount: 38, totalReferIn: 285, rejectionRate: 13.3 },
+          { name: "กุมารเวชกรรม", hospitalName: "รพ.จุฬาลงกรณ์", rejectedCount: 22, totalReferIn: 260, rejectionRate: 8.5 },
+          { name: "ออร์โธปิดิกส์", hospitalName: "รพ.พระมงกุฎเกล้า", rejectedCount: 18, totalReferIn: 198, rejectionRate: 9.1 },
+          { name: "สูติ-นรีเวชกรรม", hospitalName: "รพ.ตากสิน", rejectedCount: 15, totalReferIn: 175, rejectionRate: 8.6 },
+        ],
+      },
+    },
   },
 };
 
