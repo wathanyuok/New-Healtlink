@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from "@/stores/authStore";
 import { NAVBAR_HEIGHT } from "./Sidebar";
 import api from "@/lib/api";
+import { MOCK_HOSPITALS } from "@/mocks/dashboardMock";
 
 export default function Navbar() {
   const router = useRouter();
@@ -43,7 +44,8 @@ export default function Navbar() {
         const excludeId = (profile as any)?.permissionGroup?.hospital?.id;
         setHospitals(excludeId ? list.filter((h: any) => h.id !== excludeId) : list);
       } catch {
-        setHospitals([]);
+        console.warn("[MOCK] Hospital API unavailable, using mock data");
+        setHospitals(MOCK_HOSPITALS);
       } finally {
         setLoading(false);
       }

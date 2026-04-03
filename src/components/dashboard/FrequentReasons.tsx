@@ -24,7 +24,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
   const store = useDashboardStore();
   const [apiData, setApiData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
   const filters = store.globalFilters;
   const setFilters = (f: Filters | ((prev: Filters) => Filters)) => {
     const newFilters = typeof f === "function" ? f(store.globalFilters) : f;
@@ -39,7 +39,6 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
     hospitalId: filters.name,
     affiliation: filters.region,
     serviceLevel: filters.level,
-    dashboardType,
   }), [store.globalStartDate, store.globalEndDate, filters, dashboardType]);
 
   const fetchData = useCallback(async () => {
@@ -74,19 +73,20 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
       .map(([name, value]) => ({ name, value }));
   }, [apiData]);
 
-  // Detail table: hospitals for selected reason
+  // Detail table: hospitals for ALL selected reasons
   const detailData = useMemo(() => {
-    if (!selectedReason || !apiData || !Array.isArray(apiData)) return [];
+    if (selectedReasons.size === 0 || !apiData || !Array.isArray(apiData)) return [];
     return apiData
-      .filter((item: any) => (item.reason || item.causeName || "ไม่ระบุ") === selectedReason)
+      .filter((item: any) => selectedReasons.has(item.reason || item.causeName || "ไม่ระบุ"))
       .map((item: any, idx: number) => ({
         rank: idx + 1,
         hospital: item.hospitalName || "",
         patientType: item.supportedTypes?.join(", ") || "OPD",
         count: item.count || 0,
         percentage: item.percentage || "0%",
+        reason: item.reason || item.causeName || "ไม่ระบุ",
       }));
-  }, [apiData, selectedReason]);
+  }, [apiData, selectedReasons]);
 
   const downloadExcel = async () => {
     try {
@@ -119,11 +119,22 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
 
   const clearFilters = () => setFilters({ zone: null, type: null, name: null, region: null, level: null });
 
+  // Toggle individual bar selection — only deselects when clicking the same bar
   const handleBarClick = (data: any) => {
     if (data?.name) {
-      setSelectedReason(prev => prev === data.name ? null : data.name);
+      setSelectedReasons(prev => {
+        const next = new Set(prev);
+        if (next.has(data.name)) {
+          next.delete(data.name);
+        } else {
+          next.add(data.name);
+        }
+        return next;
+      });
     }
   };
+
+  const hasSelection = selectedReasons.size > 0;
 
   return (
     <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
@@ -137,7 +148,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
       </Box>
 
       {/* Filters */}
-      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} />
+      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} role={role} />
 
       {/* Chart + Detail Table */}
       <Box sx={{ px: 2, pb: 3 }}>
@@ -148,7 +159,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
         ) : chartData.length === 0 ? (
           <Typography textAlign="center" color="text.secondary" py={4}>ไม่พบข้อมูล</Typography>
         ) : (
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: selectedReason ? "1fr 1fr" : "1fr" }, gap: 3 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: hasSelection ? "1fr 1fr" : "1fr" }, gap: 3 }}>
             {/* Left: Bar Chart */}
             <Card variant="outlined" sx={{ borderRadius: 2 }}>
               <CardContent>
@@ -183,13 +194,13 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
                         <Cell
                           key={i}
                           fill={BAR_COLORS[i % BAR_COLORS.length]}
-                          opacity={selectedReason && selectedReason !== entry.name ? 0.4 : 1}
+                          opacity={hasSelection && !selectedReasons.has(entry.name) ? 0.4 : 1}
                         />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                {selectedReason && (
+                {hasSelection && (
                   <Typography sx={{ textAlign: "center", fontSize: 12, color: "#888", mt: 1 }}>
                     กดแท่งเดิมอีกครั้งเพื่อยกเลิกการเลือก
                   </Typography>
@@ -198,11 +209,11 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
             </Card>
 
             {/* Right: Detail Table */}
-            {selectedReason && (
+            {hasSelection && (
               <Card variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
                   <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                    สถานพยาบาลที่ปฏิเสธด้วยเหตุผล: <span style={{ color: "#036246" }}>{selectedReason}</span>
+                    สถานพยาบาลที่ปฏิเสธด้วยเหตุผล: <span style={{ color: "#036246" }}>{[...selectedReasons].join(", ")}</span>
                   </Typography>
                   {detailData.length === 0 ? (
                     <Typography textAlign="center" color="text.secondary" py={4}>ไม่พบข้อมูลสถานพยาบาล</Typography>
@@ -211,21 +222,23 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
                       <Table size="small">
                         <TableHead sx={{ bgcolor: "#036245" }}>
                           <TableRow>
-                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>ลำดับ</TableCell>
+                            <TableCell align="center" sx={{ color: "#fff", fontWeight: 600 }}>ลำดับ</TableCell>
                             <TableCell sx={{ color: "#fff", fontWeight: 600 }}>สถานพยาบาล</TableCell>
-                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>ใช้สำหรับผู้ป่วยประเภท</TableCell>
-                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>จำนวน</TableCell>
-                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>รวม</TableCell>
+                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>เหตุผล</TableCell>
+                            <TableCell align="center" sx={{ color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>ใช้สำหรับผู้ป่วยประเภท</TableCell>
+                            <TableCell align="center" sx={{ color: "#fff", fontWeight: 600 }}>จำนวน</TableCell>
+                            <TableCell align="center" sx={{ color: "#fff", fontWeight: 600 }}>รวม</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {detailData.map((row, idx) => (
                             <TableRow key={idx} hover sx={{ "&:nth-of-type(even)": { bgcolor: "#f9fafb" } }}>
-                              <TableCell>{row.rank}</TableCell>
+                              <TableCell align="center">{row.rank}</TableCell>
                               <TableCell>{row.hospital}</TableCell>
-                              <TableCell>{row.patientType}</TableCell>
-                              <TableCell>{row.count}</TableCell>
-                              <TableCell>{row.percentage}</TableCell>
+                              <TableCell>{row.reason}</TableCell>
+                              <TableCell align="center">{row.patientType}</TableCell>
+                              <TableCell align="center">{row.count}</TableCell>
+                              <TableCell align="center">{row.percentage}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

@@ -84,9 +84,9 @@ const allMenuItems: MenuItem[] = [
     icon: <DashboardIcon />,
     path: "/dashboard",
     children: [
-      { name: "แดชบอร์ดรวม", path: "/dashboard" },
-      { name: "Refer In", path: "/dashboard/refer-in" },
-      { name: "Refer Out", path: "/dashboard/refer-out" },
+      { name: "แดชบอร์ดภาพรวม", path: "/dashboard" },
+      { name: "แดชบอร์ดสถานพยาบาลรับผู้ป่วยเข้า (Refer In)", path: "/dashboard/refer-in" },
+      { name: "แดชบอร์ดสถานพยาบาลส่งตัวผู้ป่วยออก (Refer Out)", path: "/dashboard/refer-out" },
     ],
   },
   {
@@ -151,10 +151,17 @@ const allMenuItems: MenuItem[] = [
   },
 ];
 
-// TODO: เปิดเมนูอื่นๆ เมื่อ port เสร็จแล้ว
-const enabledPaths = new Set(["/dashboard"]);
+// แสดงเฉพาะเมนู Dashboard (แดชบอร์ดรวม, Refer In, Refer Out) สำหรับ demo
+const VISIBLE_PATHS = new Set(["/dashboard"]);
 
-const menuItems: MenuItem[] = allMenuItems.filter((item) => item.path === "/dashboard");
+const menuItems: MenuItem[] = allMenuItems.filter((item) => VISIBLE_PATHS.has(item.path));
+
+const enabledPaths = new Set(
+  menuItems.flatMap((item) => [
+    item.path,
+    ...(item.children?.map((c) => c.path) ?? []),
+  ])
+);
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -260,7 +267,8 @@ export default function Sidebar() {
                           primaryTypographyProps={{
                             fontSize: 13,
                             fontWeight: isActive(child.path) ? 600 : 400,
-                            whiteSpace: "nowrap",
+                            whiteSpace: "normal",
+                            lineHeight: 1.4,
                           }}
                         />
                       </ListItemButton>

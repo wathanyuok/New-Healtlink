@@ -42,8 +42,6 @@ export default function StatisticReport({ role, dashboardType }: Props) {
     if (filters.name) p.hospitalId = filters.name;
     if (filters.region) p.affiliation = filters.region;
     if (filters.level) p.serviceLevel = filters.level;
-    if (dashboardType === "refer-in") p.referralKind = "REFER_IN";
-    if (dashboardType === "refer-out") p.referralKind = "REFER_OUT";
     return p;
   }, [globalStartDate, globalEndDate, filters, dashboardType]);
 
@@ -67,12 +65,17 @@ export default function StatisticReport({ role, dashboardType }: Props) {
       { name: "ER", icon: "/images/IconER.svg", total: 0, referIn: 0, referOut: 0 },
     ];
     if (!types) return def;
+    const getDisplayTotal = (item: any) => {
+      if (dashboardType === "refer-in") return item?.referIn || 0;
+      if (dashboardType === "refer-out") return item?.referOut || 0;
+      return item?.total || 0;
+    };
     return [
-      { name: "OPD", icon: "/images/IconOPD.svg", total: types.opd?.total || 0, referIn: types.opd?.referIn || 0, referOut: types.opd?.referOut || 0 },
-      { name: "IPD", icon: "/images/IconIPD.svg", total: types.ipd?.total || 0, referIn: types.ipd?.referIn || 0, referOut: types.ipd?.referOut || 0 },
-      { name: "ER", icon: "/images/IconER.svg", total: types.emergency?.total || 0, referIn: types.emergency?.referIn || 0, referOut: types.emergency?.referOut || 0 },
+      { name: "OPD", icon: "/images/IconOPD.svg", total: getDisplayTotal(types.opd), referIn: types.opd?.referIn || 0, referOut: types.opd?.referOut || 0 },
+      { name: "IPD", icon: "/images/IconIPD.svg", total: getDisplayTotal(types.ipd), referIn: types.ipd?.referIn || 0, referOut: types.ipd?.referOut || 0 },
+      { name: "ER", icon: "/images/IconER.svg", total: getDisplayTotal(types.emergency), referIn: types.emergency?.referIn || 0, referOut: types.emergency?.referOut || 0 },
     ];
-  }, [data]);
+  }, [data, dashboardType]);
 
   const statusCards = useMemo(() => {
     const s = data?.statusStatistics;
@@ -163,7 +166,7 @@ export default function StatisticReport({ role, dashboardType }: Props) {
       </Box>
 
       {/* ── Filters ── */}
-      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} />
+      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} role={role} />
 
       {/* ── ประเภทการส่งตัว ── */}
       <Box sx={{ px: 2, pb: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(4, 1fr)" }, gap: 2 }}>

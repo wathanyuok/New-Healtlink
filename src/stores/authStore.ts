@@ -84,7 +84,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           permissionGroup: {
             id: 1,
             name: "Super Admin",
-            role: { id: 1, name: "superadmin.global" },
+            role: { id: 1, name: "superAdmin" },
             permissions: [],
           },
           hospital: null,

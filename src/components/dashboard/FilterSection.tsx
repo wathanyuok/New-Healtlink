@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { FilterAltOff as ClearIcon } from "@mui/icons-material";
 import { useDashboardStore } from "@/stores/dashboardStore";
+import { isDashboardFilterVisible } from "@/utils/dashboard";
 import type { Filters, FilterOption } from "@/types/dashboard";
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
   onFilterChange: (filters: Filters) => void;
   onClear: () => void;
   hideHospitalFilter?: boolean;
+  role?: string;
 }
 
 const MENU_PROPS = {
@@ -47,8 +49,20 @@ function makeRenderValue(options: FilterOption[]) {
   };
 }
 
-export default function FilterSection({ filters, onFilterChange, onClear, hideHospitalFilter = false }: Props) {
+export default function FilterSection({ filters, onFilterChange, onClear, hideHospitalFilter = false, role = "" }: Props) {
   const { hospitalData, hospitalZone, hospitalSubType, hospitalAffiliation, hospitalServiceLevel } = useDashboardStore();
+
+  // Role-based visibility check (matching Nuxt FilterSection behavior)
+  const isVisible = useCallback(
+    (filterName: string) => {
+      if (!role) return true; // If no role provided, show all (backward compatible)
+      return isDashboardFilterVisible(role, filterName);
+    },
+    [role],
+  );
+
+  // Check if the entire filter section should be visible
+  const showFilters = isVisible("main");
 
   const updateFilter = useCallback(
     (field: keyof Filters, value: any) => {
@@ -107,47 +121,65 @@ export default function FilterSection({ filters, onFilterChange, onClear, hideHo
     return hospitalServiceLevel.filter((l) => vals.includes(l.value));
   }, [hospitalData, hospitalServiceLevel, filters]);
 
+  // Count visible filters for grid columns
+  const visibleCount = useMemo(() => {
+    let count = 0;
+    if (isVisible("zone")) count++;
+    if (isVisible("type")) count++;
+    if (!hideHospitalFilter && isVisible("name")) count++;
+    if (isVisible("region")) count++;
+    if (isVisible("level")) count++;
+    if (isVisible("clearButton")) count++;
+    return count;
+  }, [isVisible, hideHospitalFilter]);
+
+  if (!showFilters || visibleCount === 0) return null;
+
   return (
-    <Box sx={{ px: 2, py: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: `repeat(${hideHospitalFilter ? 5 : 6}, 1fr)` }, gap: 1.5, alignItems: "end" }}>
-      <FormControl size="small" fullWidth>
-        <InputLabel shrink>โซนสถานพยาบาล</InputLabel>
-        <Select
-          value={filters.zone ?? ""}
-          label="โซนสถานพยาบาล"
-          displayEmpty
-          renderValue={makeRenderValue(zoneOptions)}
-          onChange={(e) => updateFilter("zone", e.target.value)}
-          MenuProps={MENU_PROPS}
-          sx={SELECT_SX}
-          notched
-        >
-          <MenuItem value="">ทั้งหมด</MenuItem>
-          {zoneOptions.map((opt) => (
-            <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+    <Box sx={{ px: 2, py: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: `repeat(${visibleCount}, 1fr)` }, gap: 1.5, alignItems: "end" }}>
+      {isVisible("zone") && (
+        <FormControl size="small" fullWidth>
+          <InputLabel shrink>โซนสถานพยาบาล</InputLabel>
+          <Select
+            value={filters.zone ?? ""}
+            label="โซนสถานพยาบาล"
+            displayEmpty
+            renderValue={makeRenderValue(zoneOptions)}
+            onChange={(e) => updateFilter("zone", e.target.value)}
+            MenuProps={MENU_PROPS}
+            sx={SELECT_SX}
+            notched
+          >
+            <MenuItem value="">ทั้งหมด</MenuItem>
+            {zoneOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
-      <FormControl size="small" fullWidth>
-        <InputLabel shrink>ประเภทสถานพยาบาล</InputLabel>
-        <Select
-          value={filters.type ?? ""}
-          label="ประเภทสถานพยาบาล"
-          displayEmpty
-          renderValue={makeRenderValue(typeOptions)}
-          onChange={(e) => updateFilter("type", e.target.value)}
-          MenuProps={MENU_PROPS}
-          sx={SELECT_SX}
-          notched
-        >
-          <MenuItem value="">ทั้งหมด</MenuItem>
-          {typeOptions.map((opt) => (
-            <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      {isVisible("type") && (
+        <FormControl size="small" fullWidth>
+          <InputLabel shrink>ประเภทสถานพยาบาล</InputLabel>
+          <Select
+            value={filters.type ?? ""}
+            label="ประเภทสถานพยาบาล"
+            displayEmpty
+            renderValue={makeRenderValue(typeOptions)}
+            onChange={(e) => updateFilter("type", e.target.value)}
+            MenuProps={MENU_PROPS}
+            sx={SELECT_SX}
+            notched
+          >
+            <MenuItem value="">ทั้งหมด</MenuItem>
+            {typeOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
-      {!hideHospitalFilter && (
+      {!hideHospitalFilter && isVisible("name") && (
         <FormControl size="small" fullWidth>
           <InputLabel shrink>สถานพยาบาล</InputLabel>
           <Select
@@ -168,54 +200,60 @@ export default function FilterSection({ filters, onFilterChange, onClear, hideHo
         </FormControl>
       )}
 
-      <FormControl size="small" fullWidth>
-        <InputLabel shrink>สังกัดสถานพยาบาล</InputLabel>
-        <Select
-          value={filters.region ?? ""}
-          label="สังกัดสถานพยาบาล"
-          displayEmpty
-          renderValue={makeRenderValue(regionOptions)}
-          onChange={(e) => updateFilter("region", e.target.value)}
-          MenuProps={MENU_PROPS}
-          sx={SELECT_SX}
-          notched
-        >
-          <MenuItem value="">ทั้งหมด</MenuItem>
-          {regionOptions.map((opt) => (
-            <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      {isVisible("region") && (
+        <FormControl size="small" fullWidth>
+          <InputLabel shrink>สังกัดสถานพยาบาล</InputLabel>
+          <Select
+            value={filters.region ?? ""}
+            label="สังกัดสถานพยาบาล"
+            displayEmpty
+            renderValue={makeRenderValue(regionOptions)}
+            onChange={(e) => updateFilter("region", e.target.value)}
+            MenuProps={MENU_PROPS}
+            sx={SELECT_SX}
+            notched
+          >
+            <MenuItem value="">ทั้งหมด</MenuItem>
+            {regionOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
-      <FormControl size="small" fullWidth>
-        <InputLabel shrink>ระดับการให้บริการ</InputLabel>
-        <Select
-          value={filters.level ?? ""}
-          label="ระดับการให้บริการ"
-          displayEmpty
-          renderValue={makeRenderValue(levelOptions)}
-          onChange={(e) => updateFilter("level", e.target.value)}
-          MenuProps={MENU_PROPS}
-          sx={SELECT_SX}
-          notched
-        >
-          <MenuItem value="">ทั้งหมด</MenuItem>
-          {levelOptions.map((opt) => (
-            <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      {isVisible("level") && (
+        <FormControl size="small" fullWidth>
+          <InputLabel shrink>ระดับการให้บริการ</InputLabel>
+          <Select
+            value={filters.level ?? ""}
+            label="ระดับการให้บริการ"
+            displayEmpty
+            renderValue={makeRenderValue(levelOptions)}
+            onChange={(e) => updateFilter("level", e.target.value)}
+            MenuProps={MENU_PROPS}
+            sx={SELECT_SX}
+            notched
+          >
+            <MenuItem value="">ทั้งหมด</MenuItem>
+            {levelOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value} sx={MENU_ITEM_SX}>{opt.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
-      <Button
-        variant="outlined"
-        color="inherit"
-        startIcon={<ClearIcon />}
-        onClick={onClear}
-        size="small"
-        sx={{ height: 40, color: "text.secondary", borderColor: "divider" }}
-      >
-        ล้างตัวกรอง
-      </Button>
+      {isVisible("clearButton") && (
+        <Button
+          variant="outlined"
+          color="inherit"
+          startIcon={<ClearIcon />}
+          onClick={onClear}
+          size="small"
+          sx={{ height: 40, color: "text.secondary", borderColor: "divider" }}
+        >
+          ล้างตัวกรอง
+        </Button>
+      )}
     </Box>
   );
 }

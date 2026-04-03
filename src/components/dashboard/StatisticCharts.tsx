@@ -62,13 +62,10 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
     return p;
   }, [globalStartDate, globalEndDate, filters]);
 
-  // Params with referralKind (for reportStatusStatistics)
+  // Params for reportStatusStatistics (same as baseParams, backend doesn't use referralKind)
   const params = useMemo(() => {
-    const p: any = { ...baseParams };
-    if (dashboardType === "refer-in") p.referralKind = "REFER_IN";
-    if (dashboardType === "refer-out") p.referralKind = "REFER_OUT";
-    return p;
-  }, [baseParams, dashboardType]);
+    return { ...baseParams };
+  }, [baseParams]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -93,15 +90,19 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
     return [
       { key: "opd", label: "ผู้ป่วยนอก (OPD)", color: "#8b5cf6" },
       { key: "ipd", label: "ผู้ป่วยใน (IPD)", color: "#3b82f6" },
-      { key: "emergency", label: "ฉุกเฉิน (Emergency)", color: "#ef4444" },
+      { key: "emergency", label: "ผู้ป่วยฉุกเฉิน (Emergency)", color: "#ef4444" },
     ].map(s => {
       const item = r[s.key];
       const total = item?.total || 0;
       const referIn = item?.referIn || 0;
       const referOut = item?.referOut || 0;
+      // Filter by dashboardType: show only referIn or referOut count
+      const displayValue = dashboardType === "refer-in" ? referIn
+        : dashboardType === "refer-out" ? referOut
+        : total;
       return {
         name: s.label,
-        value: total,
+        value: displayValue,
         color: s.color,
         breakdown: {
           referIn,
@@ -111,7 +112,7 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
         },
       };
     }).filter(d => d.value > 0);
-  }, [staticData]);
+  }, [staticData, dashboardType]);
 
   const chartRefer = useMemo(() => {
     const d = apiData?.charts?.referralType?.data;
@@ -168,7 +169,7 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
     const d = apiData?.charts?.departments?.data;
     if (!d?.length) return [];
     const colors = ["#f97316", "#22c55e", "#14b8a6", "#3b82f6", "#a855f7", "#ef4444", "#eab308"];
-    return d.map((i: any, idx: number) => ({ name: `${i.name}`, value: parseFloat(i.value || i.percentage) || 0, color: colors[idx % colors.length] }));
+    return d.map((i: any, idx: number) => ({ name: `${i.name}`, hospital: i.hospitalName || "", value: parseFloat(i.value || i.percentage) || 0, color: colors[idx % colors.length] }));
   }, [apiData]);
 
   const tableData = useMemo(() => {
@@ -255,8 +256,8 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
         case "status": data = chartStatus; filename = "สถานะการส่งตัว"; headers = ["สถานะ", "จำนวน"]; break;
         case "gender": data = chartGender; filename = "การแจกแจงตามเพศ"; headers = ["เพศ", "จำนวน"]; break;
         case "age": data = ageData; filename = "การแจกแจงตามช่วงอายุ"; headers = ["ช่วงอายุ", "จำนวน", "เปอร์เซ็นต์"]; break;
-        case "disease": data = diseaseData; filename = "แผนกสาขาที่รับเข้าการรักษา"; headers = ["แผนก/สาขา", "จำนวน"]; break;
-        case "table": data = tableData; filename = "แผนกสาขาที่ปฏิเสธ"; headers = ["แผนก/สาขา", "โรงพยาบาล", "Refer In", "อัตรา"]; break;
+        case "disease": data = diseaseData; filename = "แผนกสาขาที่ถูกรับเข้ารักษา"; headers = ["แผนก/สาขา", "สถานพยาบาล", dashboardType === "refer-out" ? "จำนวนรับเข้าRefer Out" : "จำนวนรับเข้าRefer In", "อัตรารับเข้า"]; break;
+        case "table": data = tableData; filename = "แผนกสาขาที่ถูกปฏิเสธ"; headers = ["แผนก/สาขา", "สถานพยาบาล", dashboardType === "refer-out" ? "จำนวนปฏิเสธ Refer Out" : "จำนวนปฏิเสธ Refer In", "อัตราปฏิเสธ"]; break;
         case "zoneMatrix": {
           const zones = ["Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5", "Zone 6", "Zone 7", "Zone 8"];
           const matrixData = apiData?.charts?.zoneMatrix?.data || apiData?.zoneMatrix || MOCK_ZONE_MATRIX;
@@ -315,43 +316,54 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
       </Box>
 
       {/* ── Filters ── */}
-      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} />
+      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} role={role} />
 
-      {/* ── Row 1: 3 Pie Charts ── */}
-      <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 3 }}>
-        <ChartCard title="รูปแบบการให้บริการ" data={chartService} type="pie" onExport={() => exportChart("service")} />
-        <ChartCard title="รูปแบบการรับส่งต่อ" data={chartRefer} type="donut" onExport={() => exportChart("refer")} />
-        <ChartCard title="สถานะการส่งตัว" data={chartStatus} type="donut" onExport={() => exportChart("status")} />
-      </Box>
+      {/* ── Row 1: Pie Charts (hide รูปแบบการรับส่งต่อ when filtered by refer-in/refer-out) ── */}
+      {dashboardType === "all" ? (
+        <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 3 }}>
+          <ChartCard title="รูปแบบการให้บริการ" data={chartService} type="pie" onExport={() => exportChart("service")} />
+          <ChartCard title="รูปแบบการรับส่งต่อ" data={chartRefer} type="donut" onExport={() => exportChart("refer")} />
+          <ChartCard title="สถานะการส่งตัว" data={chartStatus} type="donut" onExport={() => exportChart("status")} />
+        </Box>
+      ) : (
+        <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+          <ChartCard title="รูปแบบการให้บริการ" data={chartService} type="pie" onExport={() => exportChart("service")} />
+          <ChartCard title="สถานะการส่งตัว" data={chartStatus} type="donut" onExport={() => exportChart("status")} />
+        </Box>
+      )}
 
       {/* ── Row 2: Accepted dept table + Rejected dept table ── */}
       <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
-        {/* แผนก/สาขาที่รับเข้ารักษา */}
+        {/* แผนกสาขาที่ถูกรับเข้ารักษา (ซ้าย) */}
         <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}>
           <CardContent>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600}>แผนก/สาขาที่รับเข้ารักษา</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>แผนกสาขาที่ถูกรับเข้ารักษา</Typography>
               <Button size="small" startIcon={<DownloadIcon sx={{ fontSize: 14 }} />} onClick={() => exportChart("disease")} sx={{ fontSize: 12, color: "text.secondary" }}>Excel</Button>
             </Box>
             {diseaseData.length > 0 ? (
-              <TableContainer>
-                <Table size="small">
+              <TableContainer sx={{ overflowX: "auto" }}>
+                <Table size="small" sx={{ "& td, & th": { whiteSpace: "nowrap", fontSize: 13 } }}>
                   <TableHead>
                     <TableRow sx={{ bgcolor: "#f9fafb" }}>
                       <TableCell sx={{ fontWeight: 600 }}>แผนก/สาขา</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }} align="right">จำนวน</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }} align="right">อัตรา</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>สถานพยาบาล</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="center">
+                        {dashboardType === "refer-out" ? "จำนวนรับเข้าRefer Out" : "จำนวนรับเข้าRefer In"}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="center">อัตรารับเข้า</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {diseaseData.map((row: any, i: number) => {
                       const totalDisease = diseaseData.reduce((s: number, d: any) => s + (d.value || 0), 0);
-                      const pct = totalDisease > 0 ? ((row.value / totalDisease) * 100).toFixed(0) : "0";
+                      const pct = totalDisease > 0 ? ((row.value / totalDisease) * 100).toFixed(2) : "0";
                       return (
                         <TableRow key={i} hover>
                           <TableCell>{row.name}</TableCell>
-                          <TableCell align="right">{row.value}</TableCell>
-                          <TableCell align="right">{pct}%</TableCell>
+                          <TableCell>{row.hospital}</TableCell>
+                          <TableCell align="center">{row.value}</TableCell>
+                          <TableCell align="center">{pct}%</TableCell>
                         </TableRow>
                       );
                     })}
@@ -362,22 +374,24 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
           </CardContent>
         </Card>
 
-        {/* แผนก/สาขาที่ปฏิเสธ */}
+        {/* แผนกสาขาที่ถูกปฏิเสธ (ขวา) */}
         <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}>
           <CardContent>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600}>แผนก/สาขาที่ปฏิเสธ</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>แผนกสาขาที่ถูกปฏิเสธ</Typography>
               <Button size="small" startIcon={<DownloadIcon sx={{ fontSize: 14 }} />} onClick={() => exportChart("table")} sx={{ fontSize: 12, color: "text.secondary" }}>Excel</Button>
             </Box>
             {tableData.length > 0 ? (
-              <TableContainer>
-                <Table size="small">
+              <TableContainer sx={{ overflowX: "auto" }}>
+                <Table size="small" sx={{ "& td, & th": { whiteSpace: "nowrap", fontSize: 13 } }}>
                   <TableHead>
                     <TableRow sx={{ bgcolor: "#f9fafb" }}>
                       <TableCell sx={{ fontWeight: 600 }}>แผนก/สาขา</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>โรงพยาบาล</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }} align="right">Refer In</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }} align="right">อัตรา</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>สถานพยาบาล</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="center">
+                        {dashboardType === "refer-out" ? "จำนวนปฏิเสธ Refer Out" : "จำนวนปฏิเสธ Refer In"}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="center">อัตราปฏิเสธ</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -385,8 +399,8 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
                       <TableRow key={i} hover>
                         <TableCell>{row.department}</TableCell>
                         <TableCell>{row.hospital}</TableCell>
-                        <TableCell align="right">{row.referIn}</TableCell>
-                        <TableCell align="right">{row.rate}</TableCell>
+                        <TableCell align="center">{row.referIn}</TableCell>
+                        <TableCell align="center">{row.rate}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -398,7 +412,7 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
       </Box>
 
       {/* ── Row 3: Zone Heatmap Matrix + Age Bar Chart (vertical) ── */}
-      <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3, alignItems: "stretch" }}>
+      {dashboardType === "all" && <Box sx={{ px: 3, pb: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3, alignItems: "stretch" }}>
         {/* Zone Heatmap Matrix */}
         <Card variant="outlined" sx={{ borderRadius: 3, display: "flex", flexDirection: "column" }}>
           <CardContent sx={{ flex: 1 }}>
@@ -456,7 +470,7 @@ export default function StatisticCharts({ role, dashboardType }: Props) {
             ) : <EmptyState />}
           </CardContent>
         </Card>
-      </Box>
+      </Box>}
     </Paper>
   );
 }

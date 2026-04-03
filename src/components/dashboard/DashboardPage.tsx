@@ -10,8 +10,10 @@ import StatisticCharts from "./StatisticCharts";
 import ReferralReasons from "./ReferralReasons";
 import FrequentReasons from "./FrequentReasons";
 import TopAdmissionRateHospital from "./TopAdmissionRateHospital";
+import TopReferOutHospital from "./TopReferOutHospital";
 import MostReferredDisease from "./MostReferredDisease";
 import type { DashboardType } from "@/types/dashboard";
+import { isDashboardSectionVisible } from "@/utils/dashboard";
 import api from "@/lib/api";
 import {
   MOCK_HOSPITAL_ZONES,
@@ -99,7 +101,12 @@ export default function DashboardPage({ dashboardType }: Props) {
       <DashboardFilter dashboardType={dashboardType} />
       <StatisticReport role={roleName} dashboardType={dashboardType} />
       <StatisticCharts role={roleName} dashboardType={dashboardType} />
-      <TopAdmissionRateHospital role={roleName} dashboardType={dashboardType} />
+      {isDashboardSectionVisible(roleName, "hospital") && (
+        <TopAdmissionRateHospital role={roleName} dashboardType={dashboardType} />
+      )}
+      {dashboardType === "all" && isDashboardSectionVisible(roleName, "hospital") && (
+        <TopReferOutHospital role={roleName} dashboardType={dashboardType} />
+      )}
       <MostReferredDisease role={roleName} dashboardType={dashboardType} />
       <ReferralReasons role={roleName} dashboardType={dashboardType} />
       <FrequentReasons role={roleName} dashboardType={dashboardType} />

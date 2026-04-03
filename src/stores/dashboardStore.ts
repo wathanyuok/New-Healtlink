@@ -8,6 +8,12 @@ import {
   MOCK_TOP10_DISEASES,
   MOCK_TOP5_CAUSE,
   MOCK_TOP5_COMMON_REASONS,
+  MOCK_EXPORT_STATICS_AND_DETAILS,
+  MOCK_EXPORT_REPORT_STATUS_STATISTICS,
+  MOCK_EXPORT_TOP5_HOSPITALS,
+  MOCK_EXPORT_TOP10_DISEASES,
+  MOCK_EXPORT_TOP5_CAUSE,
+  MOCK_EXPORT_TOP5_COMMON_REASONS,
 } from "@/mocks/dashboardMock";
 
 const API = {
@@ -17,6 +23,8 @@ const API = {
   TOP_5_CAUSE: "main-service/dashboard/top5Cause",
   TOP_5_COMMON_REASONS: "main-service/dashboard/top5CommonReasons",
   TOP_5_HIGHEST_ACCEPTING_HOSPITALS: "main-service/dashboard/top5HighestAcceptingHospitals",
+  TOP_5_HIGHEST_REFER_OUT_HOSPITALS: "main-service/dashboard/top5HighestReferOutHospitals",
+  TOP_5_HIGHEST_REFER_IN_HOSPITALS: "main-service/dashboard/top5HighestReferInHospitals",
   TOP_10_MOST_REFERRED_DISEASES: "main-service/dashboard/top10MostReferredDiseases",
   SUMMARY_EXPORT_EXCEL: "main-service/dashboard/summaryExportExcel",
   STATICS_AND_DETAILS_EXPORT: "main-service/dashboard/staticsAndDetailsExportExcel",
@@ -85,6 +93,8 @@ interface DashboardState {
   getTop5Cause: (params: any) => Promise<any>;
   getTop5CommonReasons: (params: any) => Promise<any>;
   getTop5HighestAcceptingHospitals: (params: any) => Promise<any>;
+  getTop5HighestReferOutHospitals: (params: any) => Promise<any>;
+  getTop5HighestReferInHospitals: (params: any) => Promise<any>;
   getTop10MostReferredDiseases: (params: any) => Promise<any>;
 
   // Export
@@ -173,14 +183,16 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   getTop5Cause: (params) => apiGet(API.TOP_5_CAUSE, params, MOCK_TOP5_CAUSE),
   getTop5CommonReasons: (params) => apiGet(API.TOP_5_COMMON_REASONS, params, MOCK_TOP5_COMMON_REASONS),
   getTop5HighestAcceptingHospitals: (params) => apiGet(API.TOP_5_HIGHEST_ACCEPTING_HOSPITALS, params, MOCK_TOP5_HOSPITALS),
+  getTop5HighestReferOutHospitals: (params) => apiGet(API.TOP_5_HIGHEST_REFER_OUT_HOSPITALS, params, MOCK_TOP5_HOSPITALS),
+  getTop5HighestReferInHospitals: (params) => apiGet(API.TOP_5_HIGHEST_REFER_IN_HOSPITALS, params, MOCK_TOP5_HOSPITALS),
   getTop10MostReferredDiseases: (params) => apiGet(API.TOP_10_MOST_REFERRED_DISEASES, params, MOCK_TOP10_DISEASES),
 
-  // Export
-  exportSummaryExcel: (params) => apiGet(API.SUMMARY_EXPORT_EXCEL, params),
-  exportStaticsAndDetails: (params) => apiGet(API.STATICS_AND_DETAILS_EXPORT, params),
-  exportReportStatusStatistics: (params) => apiGet(API.REPORT_STATUS_STATISTICS_EXPORT, params),
-  exportTop5Cause: (params) => apiGet(API.TOP_5_CAUSE_EXPORT, params),
-  exportTop5CommonReasons: (params) => apiGet(API.TOP_5_COMMON_REASONS_EXPORT, params),
-  exportTop5HighestAcceptingHospitals: (params) => apiGet(API.TOP_5_HIGHEST_ACCEPTING_HOSPITALS_EXPORT, params),
-  exportTop10MostReferredDiseases: (params) => apiGet(API.TOP_10_MOST_REFERRED_DISEASES_EXPORT, params),
+  // Export (with mock fallback when backend is unavailable)
+  exportSummaryExcel: (params) => apiGet(API.SUMMARY_EXPORT_EXCEL, params, MOCK_EXPORT_STATICS_AND_DETAILS),
+  exportStaticsAndDetails: (params) => apiGet(API.STATICS_AND_DETAILS_EXPORT, params, MOCK_EXPORT_STATICS_AND_DETAILS),
+  exportReportStatusStatistics: (params) => apiGet(API.REPORT_STATUS_STATISTICS_EXPORT, params, MOCK_EXPORT_REPORT_STATUS_STATISTICS),
+  exportTop5Cause: (params) => apiGet(API.TOP_5_CAUSE_EXPORT, params, MOCK_EXPORT_TOP5_CAUSE),
+  exportTop5CommonReasons: (params) => apiGet(API.TOP_5_COMMON_REASONS_EXPORT, params, MOCK_EXPORT_TOP5_COMMON_REASONS),
+  exportTop5HighestAcceptingHospitals: (params) => apiGet(API.TOP_5_HIGHEST_ACCEPTING_HOSPITALS_EXPORT, params, MOCK_EXPORT_TOP5_HOSPITALS),
+  exportTop10MostReferredDiseases: (params) => apiGet(API.TOP_10_MOST_REFERRED_DISEASES_EXPORT, params, MOCK_EXPORT_TOP10_DISEASES),
 }));
