@@ -197,15 +197,19 @@ export default function StatisticReport({ role, dashboardType }: Props) {
                 <Typography sx={{ ml: "auto", fontSize: 24, fontWeight: 700 }}>{dept.total}</Typography>
               </Box>
               <Divider />
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: "auto", pt: 1.5 }}>
-                <Box>
-                  <Typography variant="h6" fontWeight={600} color="text.secondary">{dept.referIn}</Typography>
-                  <Typography variant="caption" color="text.secondary">Refer In</Typography>
-                </Box>
-                <Box textAlign="right">
-                  <Typography variant="h6" fontWeight={600} color="text.secondary">{dept.referOut}</Typography>
-                  <Typography variant="caption" color="text.secondary">Refer Out</Typography>
-                </Box>
+              <Stack direction="row" justifyContent={dashboardType === "refer-in" ? "flex-start" : "flex-end"} sx={{ mt: "auto", pt: 1.5 }}>
+                {dashboardType !== "refer-out" && (
+                  <Box sx={{ mr: dashboardType === "all" ? "auto" : 0 }}>
+                    <Typography variant="h6" fontWeight={600} color="text.secondary">{dept.referIn}</Typography>
+                    <Typography variant="caption" color="text.secondary">Refer In</Typography>
+                  </Box>
+                )}
+                {dashboardType !== "refer-in" && (
+                  <Box textAlign="right">
+                    <Typography variant="h6" fontWeight={600} color="text.secondary">{dept.referOut}</Typography>
+                    <Typography variant="caption" color="text.secondary">Refer Out</Typography>
+                  </Box>
+                )}
               </Stack>
             </CardContent>
           </Card>
@@ -241,39 +245,43 @@ export default function StatisticReport({ role, dashboardType }: Props) {
               </Box>
 
               {/* Refer In / Out with gradient badges */}
-              <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
+              <Stack direction="row" justifyContent={dashboardType === "refer-in" ? "flex-start" : "flex-end"} sx={{ mb: 2 }}>
                 {/* Refer In - left */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Refer In</Typography>
-                    <Typography fontWeight={700}>{card.referIn?.value ?? 0}</Typography>
+                {dashboardType !== "refer-out" && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: dashboardType === "all" ? "auto" : 0 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Refer In</Typography>
+                      <Typography fontWeight={700}>{card.referIn?.value ?? 0}</Typography>
+                    </Box>
+                    <Box sx={{
+                      background: GRADIENT_BADGE, borderRadius: 2,
+                      width: 44, height: 44,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
+                        {parsePercent(card.referIn?.percent)}%
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{
-                    background: GRADIENT_BADGE, borderRadius: 2,
-                    width: 44, height: 44,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
-                      {parsePercent(card.referIn?.percent)}%
-                    </Typography>
-                  </Box>
-                </Box>
+                )}
                 {/* Refer Out - right */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box textAlign="right">
-                    <Typography variant="caption" color="text.secondary">Refer Out</Typography>
-                    <Typography fontWeight={700}>{card.referOut?.value ?? 0}</Typography>
+                {dashboardType !== "refer-in" && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box textAlign="right">
+                      <Typography variant="caption" color="text.secondary">Refer Out</Typography>
+                      <Typography fontWeight={700}>{card.referOut?.value ?? 0}</Typography>
+                    </Box>
+                    <Box sx={{
+                      background: GRADIENT_BADGE, borderRadius: 2,
+                      width: 44, height: 44,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
+                        {parsePercent(card.referOut?.percent)}%
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{
-                    background: GRADIENT_BADGE, borderRadius: 2,
-                    width: 44, height: 44,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
-                      {parsePercent(card.referOut?.percent)}%
-                    </Typography>
-                  </Box>
-                </Box>
+                )}
               </Stack>
 
               {/* Breakdown OPD/IPD/ER */}
