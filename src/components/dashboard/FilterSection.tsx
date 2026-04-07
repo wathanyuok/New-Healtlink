@@ -20,6 +20,8 @@ interface Props {
   onClear: () => void;
   hideHospitalFilter?: boolean;
   role?: string;
+  /** Extra filter rendered at the FRONT of the filter row */
+  extraFilter?: React.ReactNode;
 }
 
 const MENU_PROPS = {
@@ -49,7 +51,7 @@ function makeRenderValue(options: FilterOption[]) {
   };
 }
 
-export default function FilterSection({ filters, onFilterChange, onClear, hideHospitalFilter = false, role = "" }: Props) {
+export default function FilterSection({ filters, onFilterChange, onClear, hideHospitalFilter = false, role = "", extraFilter }: Props) {
   const { hospitalData, hospitalZone, hospitalSubType, hospitalAffiliation, hospitalServiceLevel } = useDashboardStore();
 
   // Role-based visibility check (matching Nuxt FilterSection behavior)
@@ -124,6 +126,7 @@ export default function FilterSection({ filters, onFilterChange, onClear, hideHo
   // Count visible filters for grid columns
   const visibleCount = useMemo(() => {
     let count = 0;
+    if (extraFilter) count++;
     if (isVisible("zone")) count++;
     if (isVisible("type")) count++;
     if (!hideHospitalFilter && isVisible("name")) count++;
@@ -131,12 +134,13 @@ export default function FilterSection({ filters, onFilterChange, onClear, hideHo
     if (isVisible("level")) count++;
     if (isVisible("clearButton")) count++;
     return count;
-  }, [isVisible, hideHospitalFilter]);
+  }, [isVisible, hideHospitalFilter, extraFilter]);
 
   if (!showFilters || visibleCount === 0) return null;
 
   return (
     <Box sx={{ px: 2, py: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: `repeat(${visibleCount}, 1fr)` }, gap: 1.5, alignItems: "end" }}>
+      {extraFilter}
       {isVisible("zone") && (
         <FormControl size="small" fullWidth>
           <InputLabel shrink>โซนสถานพยาบาล</InputLabel>

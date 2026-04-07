@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Skeleton, Card, CardContent,
+  TableHead, TableRow, Skeleton, Card, CardContent, FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
 import { Download as DownloadIcon } from "@mui/icons-material";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -25,11 +25,18 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
   const [apiData, setApiData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
+  const [selectedReason, setSelectedReason] = useState<string>("");
   const filters = store.globalFilters;
   const setFilters = (f: Filters | ((prev: Filters) => Filters)) => {
     const newFilters = typeof f === "function" ? f(store.globalFilters) : f;
     store.setGlobalFilters(newFilters);
   };
+
+  const sectionTitle = useMemo(() => {
+    if (dashboardType === "refer-in") return "Top 5 เหตุผลปฏิเสธการรับเข้า";
+    if (dashboardType === "refer-out") return "Top 5 เหตุผลปฏิเสธการส่งออก";
+    return "Top 5 เหตุผลปฏิเสธการรักษา";
+  }, [dashboardType]);
 
   const params = useMemo(() => ({
     startDate: store.globalStartDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -39,6 +46,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
     hospitalId: filters.name,
     affiliation: filters.region,
     serviceLevel: filters.level,
+    ...(dashboardType !== "all" && { dashboardType }),
   }), [store.globalStartDate, store.globalEndDate, filters, dashboardType]);
 
   const fetchData = useCallback(async () => {
@@ -59,11 +67,25 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
     useDashboardStore.setState({ top5CommonReasonsFilters: filters });
   }, [filters]);
 
-  // Chart data: group by reason, sum counts
+  // Unique reason options for dropdown filter
+  const reasonOptions = useMemo(() => {
+    if (!apiData || !Array.isArray(apiData)) return [];
+    const set = new Set<string>();
+    apiData.forEach((item: any) => {
+      const reason = item.reason || item.causeName || "ไม่ระบุ";
+      set.add(reason);
+    });
+    return Array.from(set).sort();
+  }, [apiData]);
+
+  // Chart data: group by reason, sum counts, filtered by selectedReason
   const chartData = useMemo(() => {
     if (!apiData || !Array.isArray(apiData)) return [];
+    const filtered = selectedReason
+      ? apiData.filter((item: any) => (item.reason || item.causeName || "ไม่ระบุ") === selectedReason)
+      : apiData;
     const map: Record<string, number> = {};
-    apiData.forEach((item: any) => {
+    filtered.forEach((item: any) => {
       const reason = item.reason || item.causeName || "ไม่ระบุ";
       map[reason] = (map[reason] || 0) + (item.count || 1);
     });
@@ -71,7 +93,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([name, value]) => ({ name, value }));
-  }, [apiData]);
+  }, [apiData, selectedReason]);
 
   // Detail table: hospitals for ALL selected reasons
   const detailData = useMemo(() => {
@@ -88,29 +110,45 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
       }));
   }, [apiData, selectedReasons]);
 
+  // Export filtered data (respects selectedReason + hospital filters)
   const downloadExcel = async () => {
     try {
       const XLSX = await import("xlsx");
-      const response = await store.exportTop5CommonReasons(params);
-      const exportData = response?.data || response;
-      if (!exportData?.data) { alert("ไม่มีข้อมูลสำหรับการส่งออก"); return; }
+
+      // Use the currently filtered apiData instead of calling export API
+      const filtered = selectedReason
+        ? (apiData || []).filter((item: any) => (item.reason || item.causeName || "ไม่ระบุ") === selectedReason)
+        : (apiData || []);
+
+      if (filtered.length === 0) { alert("ไม่มีข้อมูลสำหรับการส่งออก"); return; }
 
       const wb = XLSX.utils.book_new();
       const sheetData: any[][] = [];
-      sheetData.push([exportData.reportTitle || "รายงาน Top 5 เหตุผลปฏิเสธการรักษา"]);
-      if (exportData.dateRange) sheetData.push([`ช่วงวันที่: ${exportData.dateRange.startDate} - ${exportData.dateRange.endDate}`]);
+      sheetData.push([`รายงาน ${sectionTitle}`]);
+      const startDate = store.globalStartDate || "";
+      const endDate = store.globalEndDate || "";
+      if (startDate || endDate) sheetData.push([`ช่วงวันที่: ${startDate} - ${endDate}`]);
+      if (selectedReason) sheetData.push([`เหตุผลที่เลือก: ${selectedReason}`]);
       sheetData.push([]);
       sheetData.push(["อันดับ", "โรงพยาบาล", "เหตุผล", "ประเภทการส่งตัว", "ประเภทบริการ", "จำนวน", "เปอร์เซ็นต์"]);
-      exportData.data.forEach((item: any) => {
-        sheetData.push([item.rank || "", item.hospitalName || "", item.reason || "", item.referralType || "", item.supportedTypes || "", item.count || 0, item.percentage || "0%"]);
+      filtered.forEach((item: any, idx: number) => {
+        sheetData.push([
+          idx + 1,
+          item.hospitalName || "",
+          item.reason || item.causeName || "",
+          item.referralType || "",
+          item.supportedTypes?.join?.(", ") || item.supportedTypes || "",
+          item.count || 0,
+          item.percentage || "0%",
+        ]);
       });
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws["!cols"] = sheetData.reduce((acc: any[], row: any[]) => {
         row.forEach((cell, i) => { const l = (cell?.toString() || "").length; if (!acc[i] || acc[i] < l) acc[i] = l; });
         return acc;
       }, []).map((w: number) => ({ wch: Math.min(w + 2, 50) }));
-      XLSX.utils.book_append_sheet(wb, ws, "Top5 เหตุผลปฏิเสธการรักษา");
-      XLSX.writeFile(wb, `Top5_เหตุผลปฏิเสธการรักษา_${Date.now()}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, sectionTitle);
+      XLSX.writeFile(wb, `${sectionTitle.replace(/ /g, "_")}_${Date.now()}.xlsx`);
     } catch (error: any) {
       console.error("Error exporting Excel:", error);
       alert(`เกิดข้อผิดพลาด: ${error.message || "ไม่สามารถดาวน์โหลดได้"}`);
@@ -140,7 +178,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
     <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
       {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, background: GRADIENT, color: "#fff" }}>
-        <Typography variant="h6" fontWeight={600}>Top 5 เหตุผลปฏิเสธการรักษา</Typography>
+        <Typography variant="h6" fontWeight={600}>{sectionTitle}</Typography>
         <Button variant="contained" size="small" startIcon={<DownloadIcon />} onClick={downloadExcel}
           sx={{ bgcolor: "#fff", color: "#036246", "&:hover": { bgcolor: "#f0f0f0" } }}>
           ดาวน์โหลดเป็น Excel
@@ -148,7 +186,31 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
       </Box>
 
       {/* Filters */}
-      <FilterSection filters={filters} onFilterChange={setFilters} onClear={clearFilters} role={role} />
+      <FilterSection
+        filters={filters}
+        onFilterChange={setFilters}
+        onClear={clearFilters}
+        role={role}
+        extraFilter={
+          <FormControl size="small" fullWidth>
+            <InputLabel shrink>เหตุผลปฏิเสธการรักษา</InputLabel>
+            <Select
+              value={selectedReason}
+              label="เหตุผลปฏิเสธการรักษา"
+              displayEmpty
+              notched
+              renderValue={(v) => (v ? String(v) : "ทั้งหมด")}
+              onChange={(e) => { setSelectedReason(e.target.value as string); setSelectedReasons(new Set()); }}
+              sx={{ "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }}
+            >
+              <MenuItem value="">ทั้งหมด</MenuItem>
+              {reasonOptions.map((r) => (
+                <MenuItem key={r} value={r} sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>{r}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        }
+      />
 
       {/* Chart + Detail Table */}
       <Box sx={{ px: 2, pb: 3 }}>
@@ -164,7 +226,7 @@ export default function FrequentReasons({ role, dashboardType }: Props) {
             <Card variant="outlined" sx={{ borderRadius: 2 }}>
               <CardContent>
                 <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2, textAlign: "center" }}>
-                  Top 5 เหตุผลปฏิเสธการรักษา
+                  {sectionTitle}
                 </Typography>
                 <ResponsiveContainer width="100%" height={chartData.length * 60 + 40}>
                   <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 40, bottom: 20, left: 10 }}>
