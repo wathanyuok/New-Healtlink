@@ -20,10 +20,10 @@ import { MOCK_HOSPITALS } from "@/mocks/dashboardMock";
 
 export default function Navbar() {
   const router = useRouter();
-  const { profile, logout } = useAuthStore();
+  const { profile, logout, setOptionHospital } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [selectedHospital, setSelectedHospital] = useState<string>("");
+  const [selectedHospital, setSelectedHospital] = useState<string>("DD-002");
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
 
@@ -52,6 +52,21 @@ export default function Navbar() {
     };
     load();
   }, [profile, isSuperAdminHospital]);
+
+  // Auto-set optionHospital in store when hospitals load and DD-002 is selected
+  useEffect(() => {
+    if (hospitals.length > 0 && selectedHospital) {
+      const h = hospitals.find((h: any) => String(h.id) === selectedHospital || h.code === selectedHospital);
+      if (h) {
+        setSelectedHospital(String(h.id));
+        setOptionHospital(h.id);
+      } else {
+        // DD-002 not found by id/code, select first hospital and keep DD-002 display
+        const first = hospitals[0];
+        setOptionHospital(first.id);
+      }
+    }
+  }, [hospitals]);
 
   const filteredHospitals = useMemo(() => {
     if (!searchText) return hospitals;
@@ -106,7 +121,10 @@ export default function Navbar() {
           <FormControl size="small" sx={{ minWidth: { xs: 200, md: 400 } }}>
             <Select
               value={selectedHospital}
-              onChange={(e) => setSelectedHospital(e.target.value)}
+              onChange={(e) => {
+                setSelectedHospital(e.target.value);
+                setOptionHospital(e.target.value ? Number(e.target.value) : null);
+              }}
               displayEmpty
               renderValue={(v) => {
                 if (!v) return (

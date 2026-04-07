@@ -21,6 +21,9 @@ import {
   RadioGroup,
   FormControlLabel,
   Collapse,
+  Dialog,
+  DialogContent,
+  Autocomplete,
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
@@ -29,9 +32,14 @@ import {
   ExpandMore,
   CloudUpload as CloudUploadIcon,
   ImageOutlined as ImageIcon,
+  Close as CloseIcon,
+  Save as SaveIcon,
+  ArrowBack as ArrowBackIcon,
 } from "@mui/icons-material";
 import { useReferralCreateStore } from "@/stores/referralCreateStore";
 import { useAuthStore } from "@/stores/authStore";
+import ThaiDateInput from "@/components/shared/ThaiDateInput";
+import api from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -58,23 +66,36 @@ interface ICD10Item {
 }
 interface MedicineItem {
   id: number;
+  drugname: string;
+  qty: string;
+  drugusage: string;
+  strength: string;
+}
+interface EquipmentItem {
+  id: number;
   name: string;
-  dose: string;
-  frequency: string;
 }
 interface EmergencyContact {
   name: string;
   phone: string;
   relation: string;
 }
+interface UploadedFileItem {
+  id: number;
+  name: string;
+  size: string;
+  file: File;
+  url: string;
+}
 interface DocumentItem {
   id: number;
   fileName: string;
-  fileType: string;
+  fileType: string; // "X-ray" | "Lab" | "MRI" | "อื่นๆ"
   docCode: string;
   docName: string;
   detail: string;
   dateTime: string;
+  files: UploadedFileItem[];
 }
 
 export interface ReferralFormData {
@@ -93,10 +114,14 @@ export interface ReferralFormData {
   patient_image: string | null;
   patient_treatment: string;
   patient_treatment_other: string;
-  patient_address: string;
-  patient_subdistrict: string;
-  patient_district: string;
-  patient_province: string;
+  patient_treatment_hospital: string;
+  patient_house: string;
+  patient_moo: string;
+  patient_road: string;
+  patient_alley: string;
+  patient_tambon: string;
+  patient_amphur: string;
+  patient_changwat: string;
   patient_zipcode: string;
   patient_phone: string;
   // Emergency contact
@@ -108,6 +133,8 @@ export interface ReferralFormData {
   additional_info: string;
   is_infectious: string; // "yes" | "no" | ""
   infectious_detail: string;
+  additionalComments: string;
+  requiredEquipment: EquipmentItem[];
   // Health info
   physicalExam: string;
   diseases: DiseaseItem[];
@@ -126,6 +153,8 @@ export interface ReferralFormData {
   moreDetail: string;
   icd10Basic: string;
   icd10: ICD10Item[];
+  icd10MoreBasic: string;
+  icd10More: ICD10Item[];
   medicines: MedicineItem[];
   // Doctor info
   prescribingDoctor: string;
@@ -137,53 +166,61 @@ export interface ReferralFormData {
 }
 
 const defaultFormData: ReferralFormData = {
-  patient_pid: "",
-  patient_prefix: "",
-  patient_firstname: "",
-  patient_lastname: "",
-  patient_birthday: "",
-  patient_age: "",
-  patient_sex: "",
-  patient_blood_group: "",
-  patient_hn: "",
+  patient_pid: "1234567890123",
+  patient_prefix: "นาย",
+  patient_firstname: "ทดสอบ",
+  patient_lastname: "ระบบ",
+  patient_birthday: "1990-05-15",
+  patient_age: "36",
+  patient_sex: "ชาย",
+  patient_blood_group: "O",
+  patient_hn: "HN001234",
   patient_an: "",
   patient_vn: "",
   patient_image: null,
-  patient_treatment: "",
+  patient_treatment: "บัตรทอง",
   patient_treatment_other: "",
-  patient_address: "",
-  patient_subdistrict: "",
-  patient_district: "",
-  patient_province: "",
-  patient_zipcode: "",
-  patient_phone: "",
-  emergency_contacts: [{ name: "", phone: "", relation: "" }],
+  patient_treatment_hospital: "",
+  patient_house: "99/1",
+  patient_moo: "5",
+  patient_road: "สุขุมวิท",
+  patient_alley: "ซอย 10",
+  patient_tambon: "บางจาก",
+  patient_amphur: "พระโขนง",
+  patient_changwat: "กรุงเทพมหานคร",
+  patient_zipcode: "10260",
+  patient_phone: "0812345678",
+  emergency_contacts: [{ name: "สมศรี ระบบ", phone: "0898765432", relation: "คู่สมรส" }],
   prescribingDoctor: "",
-  doctorCode: "",
-  medicalDepartment: "",
-  doctorContactNumber: "",
+  doctorCode: "D12345",
+  medicalDepartment: "อายุรกรรม",
+  doctorContactNumber: "0891112222",
   referral_cause: "",
-  referral_reason: "",
-  acute_level: "",
+  referral_reason: "ส่งต่อเพื่อรับการรักษา",
+  acute_level: "5",
   additional_info: "",
-  is_infectious: "",
+  is_infectious: "false",
   infectious_detail: "",
+  additionalComments: "",
+  requiredEquipment: [],
   physicalExam: "",
   diseases: [],
   drugAllergy: [],
   vaccines: [{ id: 1, vaccineName: "", date: "", location: "" }],
-  temperature: "",
-  bps: "",
-  bpd: "",
-  pulse: "",
-  rr: "",
-  visit_primary_symptom_main_symptom: "",
-  visit_primary_symptom_current_illness: "",
-  pe: "",
-  Imp: "",
+  temperature: "36.5",
+  bps: "120",
+  bpd: "80",
+  pulse: "72",
+  rr: "18",
+  visit_primary_symptom_main_symptom: "ปวดท้อง",
+  visit_primary_symptom_current_illness: "ปวดท้องบริเวณลิ้นปี่ 2 วัน มีอาเจียน",
+  pe: "Abdomen: mild tenderness at epigastric area",
+  Imp: "R/O Gastritis",
   moreDetail: "",
-  icd10Basic: "",
-  icd10: [{ id: 1, icd_10_tm: "", diagetname: "", diagename: "" }],
+  icd10Basic: "โรคกระเพาะอาหารอักเสบ",
+  icd10: [{ id: 1, icd_10_tm: "K29", diagetname: "กระเพาะอาหารอักเสบ", diagename: "GASTRITIS" }],
+  icd10MoreBasic: "",
+  icd10More: [{ id: 2, icd_10_tm: "", diagetname: "", diagename: "" }],
   medicines: [],
   documents: [],
 };
@@ -222,20 +259,25 @@ const ACUTE_LEVEL_OPTIONS = [
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 const SectionHeader = ({ title }: { title: string }) => (
-  <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1.5, mb: 0 }}>
+  <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1.5, mb: 0, borderBottom: "2px solid #16a34a" }}>
     <Typography sx={{ fontWeight: 600, color: "#036245", fontSize: "1.05rem" }}>
       {title}
     </Typography>
   </Box>
 );
 
-const SubSectionHeader = ({ title }: { title: string }) => (
-  <Box sx={{ borderBottom: "1px solid #CBD5E1", px: 2, py: 1.5 }}>
-    <Typography sx={{ fontWeight: 600, color: "#036245", fontSize: "1rem" }}>
-      {title}
-    </Typography>
-  </Box>
-);
+const SubSectionHeader = ({ title }: { title: string }) => {
+  const hasAsterisk = title.includes("*");
+  const cleanTitle = hasAsterisk ? title.replace(" *", "").replace("*", "") : title;
+  return (
+    <Box sx={{ borderBottom: "2px solid #16a34a", px: 2, py: 1.5 }}>
+      <Typography sx={{ fontWeight: 600, color: "#036245", fontSize: "1rem" }}>
+        {cleanTitle}
+        {hasAsterisk && <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>}
+      </Typography>
+    </Box>
+  );
+};
 
 const FieldLabel = ({
   label,
@@ -295,13 +337,107 @@ export default function RequestReferralForm({
   onUpdate,
   formErrors = {},
 }: Props) {
-  // Local form state merged with external
-  const [form, setForm] = useState<ReferralFormData>(() => ({
-    ...defaultFormData,
-    ...externalFormData,
-  }));
+  // Local form state merged with external (only non-empty external values override defaults)
+  const [form, setForm] = useState<ReferralFormData>(() => {
+    const merged = { ...defaultFormData };
+    if (externalFormData) {
+      Object.entries(externalFormData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
+          (merged as any)[key] = value;
+        }
+      });
+    }
+    return merged;
+  });
+  const [addressOpen, setAddressOpen] = useState(true);
   const [emergencyOpen, setEmergencyOpen] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Document upload modal state
+  const [showDocModal, setShowDocModal] = useState(false);
+  const [docModalData, setDocModalData] = useState({
+    docCode: "",
+    docName: "",
+    detail: "",
+    docType: "",
+    otherTypeDetail: "",
+    files: [] as UploadedFileItem[],
+  });
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const [showDocDetailModal, setShowDocDetailModal] = useState(false);
+  const [docDetailViewData, setDocDetailViewData] = useState<DocumentItem | null>(null);
+
+  const resetDocModal = () => {
+    setDocModalData({ docCode: "", docName: "", detail: "", docType: "อื่นๆ", otherTypeDetail: "test", files: [] });
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList) return;
+    const newFiles: UploadedFileItem[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`ไฟล์ "${file.name}" ขนาดเกิน 10 MB`);
+        continue;
+      }
+      newFiles.push({
+        id: Date.now() + i,
+        name: file.name,
+        size: formatFileSize(file.size),
+        file,
+        url: URL.createObjectURL(file),
+      });
+    }
+    setDocModalData((prev) => ({ ...prev, files: [...prev.files, ...newFiles] }));
+    // Reset input so same file can be selected again
+    if (docFileInputRef.current) docFileInputRef.current.value = "";
+  };
+
+  const removeDocFile = (fileId: number) => {
+    setDocModalData((prev) => ({ ...prev, files: prev.files.filter((f) => f.id !== fileId) }));
+  };
+
+  const handleDocModalSave = () => {
+    if (!docModalData.docType) {
+      alert("กรุณาเลือกประเภทเอกสาร");
+      return;
+    }
+    if (docModalData.docType === "อื่นๆ" && !docModalData.otherTypeDetail.trim()) {
+      alert("กรุณาระบุรายละเอียดสำหรับประเภทเอกสาร \"อื่นๆ\"");
+      return;
+    }
+    if (docModalData.docType !== "อื่นๆ" && docModalData.files.length === 0) {
+      alert("กรุณาอัพโหลดไฟล์ก่อน");
+      return;
+    }
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yyyy = now.getFullYear() + 543;
+    const hh = String(now.getHours()).padStart(2, "0");
+    const min = String(now.getMinutes()).padStart(2, "0");
+    const dateTimeStr = `${dd}/${mm}/${yyyy} ${hh}:${min} น.`;
+    const newDoc: DocumentItem = {
+      id: Date.now(),
+      fileName: docModalData.files.map((f) => f.name).join(", ") || "-",
+      fileType: docModalData.docType,
+      docCode: docModalData.docCode,
+      docName: docModalData.docName,
+      detail: docModalData.docType === "อื่นๆ" ? docModalData.otherTypeDetail : docModalData.detail,
+      dateTime: dateTimeStr,
+      files: docModalData.files,
+    };
+    updateField("documents", [...form.documents, newDoc]);
+    resetDocModal();
+    setShowDocModal(false);
+  };
 
   const updateField = useCallback(
     (field: keyof ReferralFormData, value: any) => {
@@ -343,6 +479,24 @@ export default function RequestReferralForm({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
+
+  // Auto-select first doctor when doctorUsers loads (for testing defaults)
+  useEffect(() => {
+    if (doctorUsers.length > 0 && !doctorUsers.find((d) => String(d.id) === String(form.prescribingDoctor))) {
+      const first = doctorUsers[0];
+      updateField("prescribingDoctor" as any, String(first.id));
+      updateField("docterName" as any, first.name || "");
+      if (first.licenseNumber) updateField("doctorCode" as any, first.licenseNumber);
+      if (first.phone) updateField("doctorContactNumber" as any, first.phone);
+    }
+  }, [doctorUsers]);
+
+  // Auto-select first referral cause when referralCauses loads (for testing defaults)
+  useEffect(() => {
+    if (referralCauses.length > 0 && !referralCauses.find((c) => String(c.id) === String(form.referral_cause))) {
+      updateField("referral_cause", String(referralCauses[0].id));
+    }
+  }, [referralCauses]);
 
   // Branch data from query params (branchData is JSON array from DoctorBranchSelector)
   const branchList = (() => {
@@ -465,10 +619,91 @@ export default function RequestReferralForm({
     updateField("icd10", newIcd);
   };
 
+  // ICD10 More (โรคร่วม)
+  const addICD10More = () => {
+    const newIcd = [
+      ...form.icd10More,
+      { id: Date.now(), icd_10_tm: "", diagetname: "", diagename: "" },
+    ];
+    updateField("icd10More", newIcd);
+  };
+  const removeICD10More = (index: number) => {
+    const newIcd = form.icd10More.filter((_, i) => i !== index);
+    updateField("icd10More", newIcd);
+  };
+  const updateICD10MoreField = (
+    index: number,
+    field: keyof ICD10Item,
+    value: string
+  ) => {
+    const newIcd = [...form.icd10More];
+    newIcd[index] = { ...newIcd[index], [field]: value };
+    updateField("icd10More", newIcd);
+  };
+
+  // ICD-10 autocomplete search
+  interface ICD10Option {
+    value: string;
+    label: string;
+    name_th: string;
+    name_en: string;
+  }
+  const [icd10Options, setIcd10Options] = useState<ICD10Option[]>([]);
+  const [icd10Loading, setIcd10Loading] = useState(false);
+  const icd10SearchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const searchICD10 = useCallback((searchValue: string) => {
+    if (icd10SearchTimer.current) clearTimeout(icd10SearchTimer.current);
+    if (!searchValue || searchValue.length < 1) {
+      setIcd10Options([]);
+      return;
+    }
+    icd10SearchTimer.current = setTimeout(async () => {
+      setIcd10Loading(true);
+      try {
+        const res = await api.get("main-service/icd10/findAndCount", {
+          params: { limit: 10, offset: 1, search: searchValue },
+        });
+        const items = res.data?.icd10 || res.data?.data || [];
+        setIcd10Options(
+          items.map((item: any) => ({
+            value: item.icd10_code || item.code || "",
+            label: `${item.icd10_code || item.code || ""} - ${item.icd10_name || item.name_en || ""}`,
+            name_th: item.icd10_name_th || item.name_th || "",
+            name_en: item.icd10_name || item.name_en || "",
+          }))
+        );
+      } catch (e) {
+        console.error("ICD-10 search error:", e);
+        setIcd10Options([]);
+      } finally {
+        setIcd10Loading(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleICD10Select = (
+    option: ICD10Option | null,
+    index: number,
+    section: "icd10" | "icd10More"
+  ) => {
+    if (!option) return;
+    const fieldName = section;
+    const arr = [...form[fieldName]];
+    arr[index] = {
+      ...arr[index],
+      icd_10_tm: option.value,
+      diagetname: option.name_th,
+      diagename: option.name_en,
+    };
+    updateField(fieldName, arr);
+    setIcd10Options([]);
+  };
+
   const addMedicine = () => {
     const newMeds = [
       ...form.medicines,
-      { id: Date.now(), name: "", dose: "", frequency: "" },
+      { id: Date.now(), drugname: "", qty: "", drugusage: "", strength: "" },
     ];
     updateField("medicines", newMeds);
   };
@@ -549,7 +784,7 @@ export default function RequestReferralForm({
               >
                 ข้อมูลสถานพยาบาล
               </Typography>
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }} />
+              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }} />
 
               <Box
                 sx={{
@@ -648,7 +883,7 @@ export default function RequestReferralForm({
               </Box>
 
               {/* สาขา/แผนกปลายทาง */}
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }}>
+              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }}>
                 <Typography
                   sx={{
                     fontWeight: 500,
@@ -711,7 +946,7 @@ export default function RequestReferralForm({
               </TableContainer>
 
               {/* ข้อมูลผู้สร้างใบส่งตัว */}
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mt: 2, mb: 2 }}>
+              <Box sx={{ borderBottom: "2px solid #16a34a", mt: 2, mb: 2 }}>
                 <Typography
                   sx={{
                     fontWeight: 500,
@@ -736,39 +971,44 @@ export default function RequestReferralForm({
                 <Box>
                   <Box sx={{ mb: 2 }}>
                     <FieldLabel label="แพทย์ผู้ที่สั่ง" required />
-                    <FormControl fullWidth size="small">
-                      <Select
-                        value={form.prescribingDoctor || ""}
-                        displayEmpty
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          updateField("prescribingDoctor" as any, selectedId);
-                          // Auto-fill doctor code when doctor is selected
-                          const doc = doctorUsers.find((d) => String(d.id) === String(selectedId));
-                          if (doc) {
-                            updateField("doctorCode" as any, doc.licenseNumber || "");
-                            updateField("doctorContactNumber" as any, doc.phone || "");
-                          }
-                        }}
-                        error={!!formErrors.prescribingDoctor}
-                      >
-                        <MenuItem value="" disabled>
-                          <span style={{ color: "#9ca3af" }}>
-                            เลือกแพทย์ผู้ที่สั่ง
-                          </span>
-                        </MenuItem>
-                        {doctorUsers.map((doc) => (
-                          <MenuItem key={doc.id} value={String(doc.id)}>
-                            {doc.name}
-                          </MenuItem>
-                        ))}
-                        {doctorUsers.length === 0 && (
-                          <MenuItem value="" disabled>
-                            ไม่พบแพทย์ที่ค้นหา
-                          </MenuItem>
-                        )}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      fullWidth
+                      size="small"
+                      options={doctorUsers}
+                      getOptionLabel={(option) => typeof option === "string" ? option : option.name}
+                      value={doctorUsers.find((d) => String(d.id) === String(form.prescribingDoctor)) || null}
+                      onChange={(_e, newValue) => {
+                        const selectedId = newValue ? String(newValue.id) : "";
+                        updateField("prescribingDoctor" as any, selectedId);
+                        if (newValue) {
+                          updateField("doctorCode" as any, newValue.licenseNumber || "");
+                          updateField("doctorContactNumber" as any, newValue.phone || "");
+                        } else {
+                          updateField("doctorCode" as any, "");
+                          updateField("doctorContactNumber" as any, "");
+                        }
+                      }}
+                      isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+                      noOptionsText="ไม่พบแพทย์ที่ค้นหา"
+                      renderOption={(props, option) => (
+                        <li {...props} key={String(option.id)}>
+                          {option.name}
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="เลือกแพทย์ผู้สั่ง"
+                          error={!!formErrors.prescribingDoctor}
+                        />
+                      )}
+                      ListboxProps={{ style: { maxHeight: 240 } }}
+                    />
+                    {formErrors.prescribingDoctor && (
+                      <Typography variant="caption" sx={{ color: "#ef4444", mt: 0.5 }}>
+                        {formErrors.prescribingDoctor}
+                      </Typography>
+                    )}
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <FieldLabel label="ภาควิชาแพทย์" />
@@ -797,6 +1037,7 @@ export default function RequestReferralForm({
                         updateField("doctorCode" as any, e.target.value)
                       }
                       error={!!formErrors.doctorCode}
+                      helperText={formErrors.doctorCode}
                     />
                   </Box>
                   <Box sx={{ mb: 2 }}>
@@ -815,7 +1056,7 @@ export default function RequestReferralForm({
               </Box>
 
               {/* เหตุผลและสาเหตุ */}
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }}>
+              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }}>
                 <Typography
                   sx={{
                     fontWeight: 500,
@@ -839,6 +1080,11 @@ export default function RequestReferralForm({
                       updateField("referral_cause", e.target.value)
                     }
                     error={!!formErrors.referral_cause}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: { maxHeight: 240 },
+                      },
+                    }}
                   >
                     <MenuItem value="" disabled>
                       <span style={{ color: "#9ca3af" }}>
@@ -893,7 +1139,7 @@ export default function RequestReferralForm({
               >
                 ระดับความสำคัญ
               </Typography>
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }} />
+              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }} />
 
               <Box sx={{ mb: 2 }}>
                 <FieldLabel label="ระดับความเฉียบพลัน" required />
@@ -957,7 +1203,7 @@ export default function RequestReferralForm({
               >
                 ข้อมูลเพิ่มเติม
               </Typography>
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }} />
+              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }} />
 
               {/* คนไข้เป็นโรคติดต่อ */}
               <Box sx={{ mb: 2 }}>
@@ -997,6 +1243,106 @@ export default function RequestReferralForm({
                   />
                 )}
               </Box>
+
+              {/* ความเห็นเพิ่มเติม */}
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  sx={{ fontWeight: 500, fontSize: "0.95rem", mb: 1 }}
+                >
+                  ความเห็นเพิ่มเติม
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="ความเห็นเพิ่มเติม(ถ้ามี)"
+                  value={form.additionalComments}
+                  onChange={(e) =>
+                    updateField("additionalComments", e.target.value)
+                  }
+                />
+              </Box>
+            </Box>
+
+            {/* อุปกรณ์ที่จำเป็น */}
+            <Typography
+              sx={{
+                fontWeight: 400,
+                color: "#036245",
+                fontSize: "1rem",
+                px: 2,
+                py: 1,
+                borderBottom: "2px solid #16a34a",
+              }}
+            >
+              อุปกรณ์ที่จำเป็น
+            </Typography>
+            <Box sx={{ p: 2 }}>
+              <Typography
+                sx={{ fontWeight: 500, fontSize: "0.95rem", mb: 1 }}
+              >
+                ชื่ออุปกรณ์
+              </Typography>
+              {form.requiredEquipment.map((item, index) => (
+                <Box
+                  key={item.id}
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+                >
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={item.name}
+                    onChange={(e) => {
+                      const updated = [...form.requiredEquipment];
+                      updated[index] = { ...updated[index], name: e.target.value };
+                      updateField("requiredEquipment", updated);
+                    }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      const updated = form.requiredEquipment.filter(
+                        (_, i) => i !== index
+                      );
+                      updateField("requiredEquipment", updated);
+                    }}
+                    sx={{
+                      bgcolor: "#ef4444",
+                      color: "#fff",
+                      "&:hover": { bgcolor: "#dc2626" },
+                      width: 32,
+                      height: 32,
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Box
+                onClick={() => {
+                  const newId =
+                    form.requiredEquipment.length > 0
+                      ? Math.max(...form.requiredEquipment.map((e) => e.id)) + 1
+                      : 1;
+                  updateField("requiredEquipment", [
+                    ...form.requiredEquipment,
+                    { id: newId, name: "" },
+                  ]);
+                }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px dashed #CBD5E1",
+                  borderRadius: 1,
+                  p: 1,
+                  cursor: "pointer",
+                  "&:hover": { bgcolor: "#f9fafb" },
+                }}
+              >
+                <Typography sx={{ fontWeight: 500, color: "#036245" }}>
+                  เพิ่ม
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Box>
@@ -1024,6 +1370,7 @@ export default function RequestReferralForm({
                     updateField("patient_pid", e.target.value)
                   }
                   error={!!formErrors.patient_pid}
+                  helperText={formErrors.patient_pid}
                   inputProps={{ maxLength: 13 }}
                 />
               </Box>
@@ -1058,6 +1405,11 @@ export default function RequestReferralForm({
                       ))}
                     </Select>
                   </FormControl>
+                  {formErrors.patient_prefix && (
+                    <Typography variant="caption" sx={{ color: "#ef4444", mt: 0.5 }}>
+                      {formErrors.patient_prefix}
+                    </Typography>
+                  )}
                 </Box>
                 <Box>
                   <FieldLabel label="ชื่อ" required />
@@ -1070,6 +1422,7 @@ export default function RequestReferralForm({
                       updateField("patient_firstname", e.target.value)
                     }
                     error={!!formErrors.patient_firstname}
+                    helperText={formErrors.patient_firstname}
                   />
                 </Box>
                 <Box>
@@ -1083,6 +1436,7 @@ export default function RequestReferralForm({
                       updateField("patient_lastname", e.target.value)
                     }
                     error={!!formErrors.patient_lastname}
+                    helperText={formErrors.patient_lastname}
                   />
                 </Box>
               </Box>
@@ -1149,16 +1503,25 @@ export default function RequestReferralForm({
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Box>
                     <FieldLabel label="วันเกิด" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      type="date"
-                      placeholder="DD/MM/YYYY"
+                    <ThaiDateInput
                       value={form.patient_birthday}
-                      onChange={(e) =>
-                        updateField("patient_birthday", e.target.value)
-                      }
-                      InputLabelProps={{ shrink: true }}
+                      onChange={(val) => {
+                        updateField("patient_birthday", val);
+                        // Auto-calculate age
+                        if (val) {
+                          const [by, bm, bd] = val.split("-").map(Number);
+                          const now = new Date();
+                          let age = now.getFullYear() - by;
+                          if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) {
+                            age--;
+                          }
+                          updateField("patient_age", age >= 0 ? `${age} ปี` : "");
+                        } else {
+                          updateField("patient_age", "");
+                        }
+                      }}
+                      placeholder="เลือกวันเกิด"
+                      maxDate={new Date().toISOString().split("T")[0]}
                     />
                   </Box>
                   <Box>
@@ -1182,6 +1545,11 @@ export default function RequestReferralForm({
                         ))}
                       </Select>
                     </FormControl>
+                    {formErrors.patient_sex && (
+                      <Typography variant="caption" sx={{ color: "#ef4444", mt: 0.5 }}>
+                        {formErrors.patient_sex}
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
 
@@ -1195,6 +1563,8 @@ export default function RequestReferralForm({
                       placeholder="อายุ"
                       value={form.patient_age}
                       disabled
+                      error={!!formErrors.patient_age}
+                      helperText={formErrors.patient_age}
                     />
                   </Box>
                   <Box>
@@ -1243,6 +1613,7 @@ export default function RequestReferralForm({
                       updateField("patient_hn", e.target.value)
                     }
                     error={!!formErrors.patient_hn}
+                    helperText={formErrors.patient_hn}
                   />
                 </Box>
                 <Box>
@@ -1271,176 +1642,123 @@ export default function RequestReferralForm({
                 </Box>
               </Box>
 
-              {/* สิทธิ์การรักษา */}
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
+              {/* สิทธิ์การรักษา + สิทธิ์สถานพยาบาล */}
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 2 }}>
                 <Box>
-                  <FieldLabel label="สิทธิ์การรักษา" />
-                  <FormControl fullWidth size="small">
+                  <FieldLabel label="สิทธิ์การรักษา" required />
+                  <FormControl fullWidth size="small" error={!!formErrors.patient_treatment}>
                     <Select
                       value={form.patient_treatment}
                       displayEmpty
-                      onChange={(e) =>
-                        updateField("patient_treatment", e.target.value)
-                      }
+                      onChange={(e) => updateField("patient_treatment", e.target.value)}
+                      error={!!formErrors.patient_treatment}
                     >
                       <MenuItem value="" disabled>
-                        <span style={{ color: "#9ca3af" }}>
-                          เลือกสิทธิ์การรักษา
-                        </span>
+                        <span style={{ color: "#9ca3af" }}>สิทธิ์การรักษา...</span>
                       </MenuItem>
                       {TREATMENT_OPTIONS.map((opt) => (
-                        <MenuItem key={opt.value} value={opt.value}>
-                          {opt.name}
-                        </MenuItem>
+                        <MenuItem key={opt.value} value={opt.value}>{opt.name}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
-                </Box>
-                {form.patient_treatment === "อื่นๆ" && (
-                  <Box>
-                    <FieldLabel label="ระบุสิทธิ์การรักษา" />
+                  {formErrors.patient_treatment && (
+                    <Typography variant="caption" sx={{ color: "#ef4444", mt: 0.5 }}>
+                      {formErrors.patient_treatment}
+                    </Typography>
+                  )}
+                  {form.patient_treatment === "อื่นๆ" && (
                     <TextField
                       fullWidth
                       size="small"
                       placeholder="ระบุรายละเอียด"
                       value={form.patient_treatment_other}
-                      onChange={(e) =>
-                        updateField(
-                          "patient_treatment_other",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => updateField("patient_treatment_other", e.target.value)}
+                      sx={{ mt: 1 }}
                     />
-                  </Box>
-                )}
+                  )}
+                </Box>
+                <Box>
+                  <FieldLabel label="สิทธิ์สถานพยาบาล" />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="สิทธิ์สถานพยาบาล"
+                    value={form.patient_treatment_hospital}
+                    onChange={(e) => updateField("patient_treatment_hospital", e.target.value)}
+                  />
+                </Box>
               </Box>
 
-              {/* ที่อยู่ */}
+              {/* ที่อยู่ผู้ป่วย - collapsible */}
               <Box sx={{ mb: 2 }}>
-                <FieldLabel label="ที่อยู่" />
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="ที่อยู่ผู้ป่วย"
-                  value={form.patient_address}
-                  onChange={(e) =>
-                    updateField("patient_address", e.target.value)
-                  }
-                />
-              </Box>
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <FieldLabel label="ตำบล/แขวง" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="กรอกตำบล/แขวง"
-                    value={form.patient_subdistrict}
-                    onChange={(e) =>
-                      updateField("patient_subdistrict", e.target.value)
-                    }
-                  />
+                <Box
+                  onClick={() => setAddressOpen((v) => !v)}
+                  sx={{ cursor: "pointer", borderBottom: "2px solid #16a34a", px: 1, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
+                  <Typography sx={{ fontWeight: 500, color: "#036245", fontSize: "1rem" }}>ที่อยู่ผู้ป่วย</Typography>
+                  {addressOpen ? <ExpandLess sx={{ color: "#036245" }} /> : <ExpandMore sx={{ color: "#036245" }} />}
                 </Box>
-                <Box>
-                  <FieldLabel label="อำเภอ/เขต" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="กรอกอำเภอ/เขต"
-                    value={form.patient_district}
-                    onChange={(e) =>
-                      updateField("patient_district", e.target.value)
-                    }
-                  />
-                </Box>
-                <Box>
-                  <FieldLabel label="จังหวัด" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="กรอกจังหวัด"
-                    value={form.patient_province}
-                    onChange={(e) =>
-                      updateField("patient_province", e.target.value)
-                    }
-                  />
-                </Box>
-              </Box>
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <FieldLabel label="รหัสไปรษณีย์" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="กรอกข้อมูลรหัสไปรษณีย์"
-                    value={form.patient_zipcode}
-                    onChange={(e) =>
-                      updateField("patient_zipcode", e.target.value)
-                    }
-                  />
-                </Box>
-                <Box>
-                  <FieldLabel label="เบอร์โทรผู้ป่วย" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="กรอกข้อมูลเบอร์โทรผู้ป่วย"
-                    value={form.patient_phone}
-                    onChange={(e) =>
-                      updateField("patient_phone", e.target.value)
-                    }
-                  />
-                </Box>
+                <Collapse in={addressOpen}>
+                  <Box sx={{ pt: 2 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, mb: 2 }}>
+                      <Box>
+                        <FieldLabel label="บ้านเลขที่" />
+                        <TextField fullWidth size="small" placeholder="บ้านเลขที่" value={form.patient_house} onChange={(e) => updateField("patient_house", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="หมู่" />
+                        <TextField fullWidth size="small" placeholder="กรอกหมู่" value={form.patient_moo} onChange={(e) => updateField("patient_moo", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="ถนน/สาย" />
+                        <TextField fullWidth size="small" placeholder="กรอกถนน/สาย" value={form.patient_road} onChange={(e) => updateField("patient_road", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="ซอย/ตรอก" />
+                        <TextField fullWidth size="small" placeholder="กรอกซอย/ตรอก" value={form.patient_alley} onChange={(e) => updateField("patient_alley", e.target.value)} />
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, mb: 2 }}>
+                      <Box>
+                        <FieldLabel label="ตำบล/แขวง" />
+                        <TextField fullWidth size="small" placeholder="กรอกตำบล/แขวง" value={form.patient_tambon} onChange={(e) => updateField("patient_tambon", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="อำเภอ/เขต" />
+                        <TextField fullWidth size="small" placeholder="กรอกข้อมูลอำเภอ/เขต" value={form.patient_amphur} onChange={(e) => updateField("patient_amphur", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="จังหวัด" />
+                        <TextField fullWidth size="small" placeholder="กรอกจังหวัด" value={form.patient_changwat} onChange={(e) => updateField("patient_changwat", e.target.value)} />
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                      <Box>
+                        <FieldLabel label="รหัสไปรษณีย์" />
+                        <TextField fullWidth size="small" placeholder="กรอกข้อมูลรหัสไปรษณีย์" value={form.patient_zipcode} onChange={(e) => updateField("patient_zipcode", e.target.value)} />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="เบอร์โทรผู้ป่วย" />
+                        <TextField fullWidth size="small" placeholder="กรอกข้อมูลเบอร์โทรผู้ป่วย" value={form.patient_phone} onChange={(e) => updateField("patient_phone", e.target.value)} />
+                      </Box>
+                    </Box>
+                  </Box>
+                </Collapse>
               </Box>
 
               {/* ติดต่อในกรณีฉุกเฉิน */}
-              <Box
-                sx={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 1,
-                  overflow: "hidden",
-                  mb: 2,
-                }}
-              >
+              <Box sx={{ mb: 2 }}>
                 <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    px: 2,
-                    py: 1.5,
-                    cursor: "pointer",
-                  }}
                   onClick={() => setEmergencyOpen(!emergencyOpen)}
+                  sx={{ cursor: "pointer", borderBottom: "2px solid #16a34a", px: 1, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <Typography sx={{ fontWeight: 500, fontSize: "1rem" }}>
+                  <Typography sx={{ fontWeight: 500, color: "#036245", fontSize: "1rem" }}>
                     ติดต่อในกรณีฉุกเฉิน
                   </Typography>
-                  {emergencyOpen ? <ExpandLess /> : <ExpandMore />}
+                  {emergencyOpen ? <ExpandLess sx={{ color: "#036245" }} /> : <ExpandMore sx={{ color: "#036245" }} />}
                 </Box>
                 <Collapse in={emergencyOpen}>
-                  <Box sx={{ px: 2, pb: 2 }}>
+                  <Box sx={{ pt: 2 }}>
                     {form.emergency_contacts.map((contact, index) => (
                       <Box
                         key={index}
@@ -1501,7 +1819,6 @@ export default function RequestReferralForm({
                         </Box>
                       </Box>
                     ))}
-                    <AddButton onClick={addEmergencyContact} />
                   </Box>
                 </Collapse>
               </Box>
@@ -1651,16 +1968,12 @@ export default function RequestReferralForm({
                 </Box>
                 <Box sx={{ flex: 1 }}>
                   <FieldLabel label="วันที่ได้รับ" />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="date"
-                    placeholder="DD/MM/YYYY"
+                  <ThaiDateInput
                     value={vaccine.date}
-                    onChange={(e) =>
-                      updateVaccineField(index, "date", e.target.value)
+                    onChange={(val) =>
+                      updateVaccineField(index, "date", val)
                     }
-                    InputLabelProps={{ shrink: true }}
+                    placeholder="เลือกวันที่ได้รับ"
                   />
                 </Box>
                 <Box sx={{ flex: 1 }}>
@@ -1789,6 +2102,7 @@ export default function RequestReferralForm({
                   )
                 }
                 error={!!formErrors.visit_primary_symptom_main_symptom}
+                helperText={formErrors.visit_primary_symptom_main_symptom}
               />
             </Box>
 
@@ -1882,10 +2196,8 @@ export default function RequestReferralForm({
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr 1fr auto",
                     gap: 2,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 1,
-                    p: 2,
-                    mb: 1,
+                    mb: 2,
+                    alignItems: "end",
                   }}
                 >
                   <Box>
@@ -1902,14 +2214,42 @@ export default function RequestReferralForm({
                   </Box>
                   <Box>
                     <FieldLabel label="ชื่อโรคภาษาไทย" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="ชื่อโรคภาษาไทย"
-                      value={item.diagetname}
-                      onChange={(e) =>
-                        updateICD10Field(index, "diagetname", e.target.value)
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.diagetname}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10Field(index, "diagetname", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.label
                       }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="ชื่อโรคภาษาไทย"
+                        />
+                      )}
                     />
                   </Box>
                   <Box>
@@ -1927,12 +2267,230 @@ export default function RequestReferralForm({
                   <Box
                     sx={{
                       display: "flex",
-                      alignItems: "flex-end",
-                      pb: 0.5,
+                      alignItems: "center",
+                      pb: 0.25,
                     }}
                   >
                     <IconButton
                       onClick={() => removeICD10(index)}
+                      sx={{
+                        bgcolor: "#ef4444",
+                        color: "#fff",
+                        "&:hover": { bgcolor: "#dc2626" },
+                        width: 40,
+                        height: 40,
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Box>
+              ))}
+              <AddButton onClick={addICD10} />
+            </Box>
+
+            {/* รายการโรคร่วมที่ต้องการให้รักษา */}
+            <SubSectionHeader title="รายการโรคร่วมที่ต้องการให้รักษา" />
+            <Box sx={{ p: 0, pt: 2 }}>
+              <Typography sx={{ fontWeight: 600, mb: 1 }}>
+                วินิฉัยโรคร่วม
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="วินิฉัยโรค"
+                value={form.icd10MoreBasic}
+                onChange={(e) =>
+                  updateField("icd10MoreBasic", e.target.value)
+                }
+                sx={{ mb: 2 }}
+              />
+
+              {form.icd10More.map((item, index) => (
+                <Box
+                  key={item.id}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr auto",
+                    gap: 2,
+                    mb: 2,
+                    alignItems: "end",
+                  }}
+                >
+                  <Box>
+                    <FieldLabel label="รหัสโรค (ICD-10)" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="รหัสโรค (ICD-10)"
+                      value={item.icd_10_tm}
+                      onChange={(e) =>
+                        updateICD10MoreField(index, "icd_10_tm", e.target.value)
+                      }
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="ชื่อโรคภาษาไทย" />
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.diagetname}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10MoreField(index, "diagetname", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10More");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.label
+                      }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="ชื่อโรคภาษาไทย"
+                        />
+                      )}
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="ชื่อโรคภาษาอังกฤษ" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="ชื่อโรคภาษาอังกฤษ"
+                      value={item.diagename}
+                      onChange={(e) =>
+                        updateICD10MoreField(index, "diagename", e.target.value)
+                      }
+                    />
+                  </Box>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      pb: 0.25,
+                    }}
+                  >
+                    <IconButton
+                      onClick={() => removeICD10More(index)}
+                      sx={{
+                        bgcolor: "#ef4444",
+                        color: "#fff",
+                        "&:hover": { bgcolor: "#dc2626" },
+                        width: 40,
+                        height: 40,
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Box>
+              ))}
+              <AddButton onClick={addICD10More} />
+            </Box>
+
+            {/* รายการยา */}
+            <SubSectionHeader title="รายการยา" />
+            <Box sx={{ p: 2 }}>
+              {form.medicines.map((med, index) => (
+                <Box
+                  key={med.id}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 2fr 1fr 1fr 1fr auto",
+                    gap: 2,
+                    alignItems: "start",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 1,
+                    p: 2,
+                    mb: 1,
+                  }}
+                >
+                  {/* ลำดับที่ */}
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pt: 2.5 }}>
+                    <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "#6b7280", mb: 0.5 }}>
+                      ลำดับที่
+                    </Typography>
+                    <Typography sx={{ fontSize: "1.1rem", fontWeight: 600 }}>
+                      {index + 1}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <FieldLabel label="ชื่อยา" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="ชื่อยา"
+                      value={med.drugname}
+                      onChange={(e) => {
+                        const newMeds = [...form.medicines];
+                        newMeds[index] = { ...newMeds[index], drugname: e.target.value };
+                        updateField("medicines", newMeds);
+                      }}
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="จำนวน" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="จำนวน"
+                      value={med.qty}
+                      onChange={(e) => {
+                        const newMeds = [...form.medicines];
+                        newMeds[index] = { ...newMeds[index], qty: e.target.value };
+                        updateField("medicines", newMeds);
+                      }}
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="วิธีใช้" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="วิธีใช้"
+                      value={med.drugusage}
+                      onChange={(e) => {
+                        const newMeds = [...form.medicines];
+                        newMeds[index] = { ...newMeds[index], drugusage: e.target.value };
+                        updateField("medicines", newMeds);
+                      }}
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="Memo" />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="Memo"
+                      value={med.strength}
+                      onChange={(e) => {
+                        const newMeds = [...form.medicines];
+                        newMeds[index] = { ...newMeds[index], strength: e.target.value };
+                        updateField("medicines", newMeds);
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "flex-end", pb: 0.5, pt: 2.5 }}>
+                    <IconButton
+                      onClick={() => removeMedicine(index)}
                       sx={{
                         bgcolor: "#ef4444",
                         color: "#fff",
@@ -1944,51 +2502,6 @@ export default function RequestReferralForm({
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Box>
-                </Box>
-              ))}
-              <AddButton onClick={addICD10} />
-
-              {/* รายการยา */}
-              <Typography sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
-                รายการยา
-              </Typography>
-              <Box sx={{ borderBottom: "1px solid #e5e7eb", mb: 2 }} />
-              {form.medicines.map((med, index) => (
-                <Box
-                  key={med.id}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 1,
-                    p: 2,
-                    mb: 1,
-                  }}
-                >
-                  <TextField
-                    size="small"
-                    placeholder="ชื่อยา"
-                    value={med.name}
-                    onChange={(e) => {
-                      const newMeds = [...form.medicines];
-                      newMeds[index] = { ...newMeds[index], name: e.target.value };
-                      updateField("medicines", newMeds);
-                    }}
-                    sx={{ flex: 1 }}
-                  />
-                  <IconButton
-                    onClick={() => removeMedicine(index)}
-                    sx={{
-                      bgcolor: "#ef4444",
-                      color: "#fff",
-                      "&:hover": { bgcolor: "#dc2626" },
-                      width: 36,
-                      height: 36,
-                    }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
                 </Box>
               ))}
               <AddButton onClick={addMedicine} />
@@ -2023,6 +2536,7 @@ export default function RequestReferralForm({
               <Button
                 variant="outlined"
                 startIcon={<CloudUploadIcon />}
+                onClick={() => { resetDocModal(); setShowDocModal(true); }}
                 sx={{
                   textTransform: "none",
                   borderColor: "#00AF75",
@@ -2073,7 +2587,7 @@ export default function RequestReferralForm({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {form.documents.length === 0 && (
+                  {form.documents.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
                         <Typography variant="body2" color="textSecondary">
@@ -2082,13 +2596,319 @@ export default function RequestReferralForm({
                         </Typography>
                       </TableCell>
                     </TableRow>
+                  ) : (
+                    form.documents.map((doc, index) => (
+                      <TableRow key={doc.id}>
+                        <TableCell align="center">{index + 1}</TableCell>
+                        <TableCell align="center">
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => { setDocDetailViewData(doc); setShowDocDetailModal(true); }}
+                            sx={{
+                              textTransform: "none",
+                              fontSize: "0.75rem",
+                              borderColor: "#6b7280",
+                              color: "#374151",
+                              "&:hover": { borderColor: "#374151" },
+                              minWidth: 0,
+                              px: 1.5,
+                            }}
+                            startIcon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}
+                          >
+                            เปิดดู
+                          </Button>
+                        </TableCell>
+                        <TableCell align="center">{doc.fileType}</TableCell>
+                        <TableCell align="center">{doc.docCode || "-"}</TableCell>
+                        <TableCell align="center">{doc.docName || "-"}</TableCell>
+                        <TableCell align="center">{doc.detail || "-"}</TableCell>
+                        <TableCell align="center">{doc.dateTime}</TableCell>
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              const updated = form.documents.filter((_, i) => i !== index);
+                              updateField("documents", updated);
+                            }}
+                            sx={{ bgcolor: "#ef4444", color: "#fff", "&:hover": { bgcolor: "#dc2626" }, width: 32, height: 32 }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
+            {form.documents.length > 0 && (
+              <Box sx={{ bgcolor: "#e5e7eb", px: 2, py: 0.75, borderRadius: "0 0 4px 4px" }}>
+                <Typography sx={{ fontSize: "0.8rem", fontWeight: 500 }}>
+                  ทั้งหมด {form.documents.length} เอกสาร
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Box>
       </Box>
+
+      {/* ========== Document Detail View Modal ========== */}
+      <Dialog
+        open={showDocDetailModal}
+        onClose={() => setShowDocDetailModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, overflow: "hidden" } }}
+      >
+        <Box sx={{ bgcolor: "#00AF75", px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: "1.1rem" }}>
+            รายละเอียดไฟล์แนบ
+          </Typography>
+          <IconButton onClick={() => setShowDocDetailModal(false)} sx={{ color: "#fff" }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ p: 3 }}>
+          {docDetailViewData && (
+            <Box>
+              <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1, borderRadius: 1, mb: 1 }}>
+                <Typography sx={{ fontWeight: 600, color: "#036245" }}>รายละเอียด</Typography>
+              </Box>
+              <Box sx={{ border: "1px solid #e5e7eb", borderRadius: 1, p: 2, mb: 2 }}>
+                <Typography>{docDetailViewData.detail || "-"}</Typography>
+              </Box>
+              {docDetailViewData.files && docDetailViewData.files.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1, borderRadius: 1, mb: 1 }}>
+                    <Typography sx={{ fontWeight: 600, color: "#036245" }}>ไฟล์แนบ ({docDetailViewData.files.length} ไฟล์)</Typography>
+                  </Box>
+                  {docDetailViewData.files.map((f) => (
+                    <Box key={f.id} sx={{ border: "1px solid #e5e7eb", borderRadius: 1, p: 2, mb: 1 }}>
+                      {f.name.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ? (
+                        <Box sx={{ textAlign: "center" }}>
+                          <img src={f.url} alt={f.name} style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 4 }} />
+                          <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#6b7280" }}>{f.name} ({f.size})</Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography sx={{ flex: 1 }}>{f.name} ({f.size})</Typography>
+                          <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ color: "#00AF75", fontWeight: 600 }}>เปิดไฟล์</a>
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setShowDocDetailModal(false)}
+              sx={{ textTransform: "none", borderColor: "#00AF75", color: "#00AF75", "&:hover": { borderColor: "#036245", color: "#036245" } }}
+            >
+              ยกเลิก
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========== Document Upload Modal ========== */}
+      <Dialog
+        open={showDocModal}
+        onClose={() => setShowDocModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, overflow: "hidden" } }}
+      >
+        {/* Header */}
+        <Box sx={{ bgcolor: "#00AF75", px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: "1.1rem" }}>
+            เพิ่มไฟล์เอกสารประกอบการรักษา
+          </Typography>
+          <IconButton onClick={() => setShowDocModal(false)} sx={{ color: "#fff" }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <DialogContent sx={{ p: 3 }}>
+          {/* เลขที่เอกสาร */}
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>เลขที่เอกสาร</Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="เลขที่เอกสาร(ถ้ามี)"
+              value={docModalData.docCode}
+              onChange={(e) => setDocModalData((p) => ({ ...p, docCode: e.target.value }))}
+            />
+          </Box>
+
+          {/* ชื่อเอกสาร */}
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>ชื่อเอกสาร</Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="ชื่อเอกสาร(ถ้าต้องการระบุ)"
+              value={docModalData.docName}
+              onChange={(e) => setDocModalData((p) => ({ ...p, docName: e.target.value }))}
+            />
+          </Box>
+
+          {/* รายละเอียด */}
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>รายละเอียด</Typography>
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              rows={3}
+              placeholder="รายละเอียด"
+              value={docModalData.detail}
+              onChange={(e) => setDocModalData((p) => ({ ...p, detail: e.target.value }))}
+            />
+          </Box>
+
+          {/* รายละเอียด label + ประเภทเอกสาร */}
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>
+              ประเภทเอกสาร <span style={{ color: "#ef4444" }}>*</span>
+            </Typography>
+            <RadioGroup
+              row
+              value={docModalData.docType}
+              onChange={(e) => setDocModalData((p) => ({ ...p, docType: e.target.value }))}
+            >
+              <FormControlLabel value="X-ray" control={<Radio size="small" />} label="X-ray" />
+              <FormControlLabel value="Lab" control={<Radio size="small" />} label="Lab" />
+              <FormControlLabel value="MRI" control={<Radio size="small" />} label="MRI" />
+              <FormControlLabel value="อื่นๆ" control={<Radio size="small" />} label="อื่นๆ" />
+            </RadioGroup>
+            {docModalData.docType === "อื่นๆ" && (
+              <Box sx={{ mt: 1, border: docModalData.docType === "อื่นๆ" && !docModalData.otherTypeDetail.trim() ? "1px solid #ef4444" : "1px solid #e5e7eb", borderRadius: 1, p: 0 }}>
+                <Typography sx={{ fontWeight: 500, fontSize: "0.85rem", mb: 0.5, px: 1.5, pt: 1 }}>
+                  ระบุรายละเอียด <span style={{ color: "#ef4444" }}>*</span>
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={3}
+                  placeholder="ขอความอื่นๆ"
+                  value={docModalData.otherTypeDetail}
+                  onChange={(e) => setDocModalData((p) => ({ ...p, otherTypeDetail: e.target.value }))}
+                  sx={{ "& .MuiOutlinedInput-notchedOutline": { border: "none" } }}
+                />
+              </Box>
+            )}
+          </Box>
+
+          {/* Uploaded files list */}
+          {docModalData.files.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography sx={{ fontWeight: 500, mb: 1 }}>
+                ไฟล์ที่อัพโหลด ({docModalData.files.length} ไฟล์)
+              </Typography>
+              {docModalData.files.map((f) => (
+                <Box
+                  key={f.id}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 1,
+                    p: 1.5,
+                    mb: 1,
+                    bgcolor: "#f9fafb",
+                  }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ color: "#9ca3af", flexShrink: 0, marginRight: 12 }}>
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 500 }}>{f.name}</Typography>
+                    <Typography sx={{ fontSize: "0.75rem", color: "#9ca3af" }}>{f.size}</Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={() => removeDocFile(f.id)}
+                    sx={{ bgcolor: "#ef4444", color: "#fff", "&:hover": { bgcolor: "#dc2626" }, width: 32, height: 32 }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* File upload area */}
+          <Box
+            onClick={() => docFileInputRef.current?.click()}
+            sx={{
+              border: "2px dashed #CBD5E1",
+              borderRadius: 1,
+              p: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1,
+              cursor: "pointer",
+              bgcolor: "#f9fafb",
+              "&:hover": { bgcolor: "#f0fdf4" },
+              mb: 1,
+            }}
+          >
+            <CloudUploadIcon sx={{ color: "#6b7280" }} />
+            <Typography sx={{ color: "#374151" }}>
+              เลือกอัพโหลดไฟล์
+            </Typography>
+          </Box>
+          <input
+            ref={docFileInputRef}
+            type="file"
+            hidden
+            multiple
+            accept="image/*,.pdf,.doc,.docx"
+            onChange={handleDocFileChange}
+          />
+          <Typography variant="caption" sx={{ color: "#9ca3af" }}>
+            กำหนดขนาดไฟล์แนบสูงสุด 10 MB
+          </Typography>
+
+          {/* Footer buttons */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 3 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setShowDocModal(false)}
+              sx={{
+                textTransform: "none",
+                borderColor: "#00AF75",
+                color: "#00AF75",
+                "&:hover": { borderColor: "#036245", color: "#036245" },
+              }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleDocModalSave}
+              sx={{
+                textTransform: "none",
+                bgcolor: "#00AF75",
+                "&:hover": { bgcolor: "#036245" },
+              }}
+            >
+              บันทึกข้อมูล
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Paper>
   );
 }

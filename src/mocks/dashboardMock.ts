@@ -536,6 +536,10 @@ export const MOCK_STATICS_AND_DETAILS = {
         breakdown: {
           opd: 720, ipd: 500, emergency: 300,
           opdPercentage: "47.4", ipdPercentage: "32.9", emergencyPercentage: "19.7",
+          opdReferIn: 400, ipdReferIn: 280, emergencyReferIn: 140,
+          opdReferInPercentage: "48.8", ipdReferInPercentage: "34.1", emergencyReferInPercentage: "17.1",
+          opdReferOut: 320, ipdReferOut: 220, emergencyReferOut: 160,
+          opdReferOutPercentage: "45.7", ipdReferOutPercentage: "31.4", emergencyReferOutPercentage: "22.9",
         },
       },
       reject: {
@@ -547,6 +551,10 @@ export const MOCK_STATICS_AND_DETAILS = {
         breakdown: {
           opd: 180, ipd: 120, emergency: 80,
           opdPercentage: "47.4", ipdPercentage: "31.6", emergencyPercentage: "21.1",
+          opdReferIn: 95, ipdReferIn: 60, emergencyReferIn: 40,
+          opdReferInPercentage: "48.7", ipdReferInPercentage: "30.8", emergencyReferInPercentage: "20.5",
+          opdReferOut: 85, ipdReferOut: 60, emergencyReferOut: 40,
+          opdReferOutPercentage: "45.9", ipdReferOutPercentage: "32.4", emergencyReferOutPercentage: "21.6",
         },
       },
       waiting: {
@@ -558,6 +566,10 @@ export const MOCK_STATICS_AND_DETAILS = {
         breakdown: {
           opd: 345, ipd: 256, emergency: 143,
           opdPercentage: "46.4", ipdPercentage: "34.4", emergencyPercentage: "19.2",
+          opdReferIn: 185, ipdReferIn: 135, emergencyReferIn: 75,
+          opdReferInPercentage: "46.8", ipdReferInPercentage: "34.2", emergencyReferInPercentage: "19.0",
+          opdReferOut: 160, ipdReferOut: 121, emergencyReferOut: 68,
+          opdReferOutPercentage: "45.8", ipdReferOutPercentage: "34.7", emergencyReferOutPercentage: "19.5",
         },
       },
     },

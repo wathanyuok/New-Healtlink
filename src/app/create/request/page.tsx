@@ -20,6 +20,8 @@ import {
   FormControl,
   InputLabel,
   InputAdornment,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -41,6 +43,7 @@ import {
   type HospitalOption,
   type DoctorBranchOption,
 } from "@/stores/referralCreateStore";
+import { useAuthStore } from "@/stores/authStore";
 
 /* ------------------------------------------------------------------ */
 /*  Request Inner                                                      */
@@ -86,7 +89,12 @@ function RequestReferralInner() {
   const [limit, setLimit] = useState(10); // default 10 rows per page
   const [isLoading, setIsLoading] = useState(false);
   const [sendData, setSendData] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastSeverity, setToastSeverity] = useState<"success" | "error">("success");
   const [patientInfo, setPatientInfo] = useState<{ firstname?: string; lastname?: string } | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -246,37 +254,253 @@ function RequestReferralInner() {
     })}`);
   };
 
+  const validateRequiredFields = useCallback(() => {
+    const errors: Record<string, string> = {};
+    const requiredFields: { key: string; label: string }[] = [
+      { key: "prescribingDoctor", label: "กรุณาเลือกแพทย์ผู้ที่สั่ง" },
+      { key: "doctorCode", label: "กรุณากรอกรหัสแพทย์" },
+      { key: "referral_cause", label: "กรุณาเลือกสาเหตุการส่งตัว" },
+      { key: "acute_level", label: "กรุณาเลือกระดับความเฉียบพลัน" },
+      { key: "patient_pid", label: "กรุณากรอกเลขที่บัตรประชาชน" },
+      { key: "patient_prefix", label: "กรุณาเลือกคำนำหน้า" },
+      { key: "patient_firstname", label: "กรุณากรอกชื่อ" },
+      { key: "patient_lastname", label: "กรุณากรอกนามสกุล" },
+      { key: "patient_sex", label: "กรุณาเลือกเพศ" },
+      { key: "patient_age", label: "กรุณากรอกอายุ" },
+      { key: "patient_hn", label: "กรุณากรอก HN" },
+      { key: "patient_treatment", label: "กรุณาเลือกสิทธิ์การรักษา" },
+      { key: "visit_primary_symptom_main_symptom", label: "กรุณากรอกอาการนำ" },
+    ];
+    for (const { key, label } of requiredFields) {
+      const val = formData[key];
+      if (!val || (typeof val === "string" && val.trim() === "")) {
+        errors[key] = label;
+      }
+    }
+    return errors;
+  }, [formData]);
+
   const handleSave = useCallback(
     async (saveType: "draft" | "submit") => {
       if (isLoading || sendData) return;
+
+      // Validate required fields only on submit (not draft)
+      if (saveType === "submit") {
+        const errors = validateRequiredFields();
+        setFormErrors(errors);
+        if (Object.keys(errors).length > 0) {
+          const firstErrorKey = Object.keys(errors)[0];
+          const el = document.querySelector(`[data-field="${firstErrorKey}"]`) || document.querySelector(`#${firstErrorKey}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+      }
+
       setIsLoading(true);
       setSendData(true);
+      setShowLoadingOverlay(true);
 
       try {
-        const payload = {
-          ...formData,
-          referralType: kind,
-          hospital: hospitalParam,
-          hospitalID: hospitalIDParam,
-          branch_names: branchNamesParam,
-          saveType,
+        // ── Get hospital IDs like Nuxt's getDataFromHospital ──
+        const authState = useAuthStore.getState();
+        const roleName = authState.getRoleName();
+        let fromHospitalId: number | undefined; // user's own hospital (ต้นทาง)
+        if (roleName === "superAdminHospital") {
+          fromHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id ?? undefined;
+        } else if (roleName === "superAdmin" || roleName === "superAdminZone") {
+          fromHospitalId = authState.optionHospital ?? undefined;
+        }
+
+        const toHospitalId = hospitalIDParam ? parseInt(hospitalIDParam, 10) : undefined;
+
+        if (!fromHospitalId) {
+          alert("กรุณาเลือกสถานพยาบาลต้นทางก่อนบันทึก");
+          setIsLoading(false);
+          setSendData(false);
+          return;
+        }
+        if (!toHospitalId) {
+          alert("ไม่พบข้อมูลสถานพยาบาลปลายทาง กรุณาลองใหม่อีกครั้ง");
+          setIsLoading(false);
+          setSendData(false);
+          return;
+        }
+
+        // ── referralStatus: 1 = draft, 3 = submit ──
+        const referralStatusMap: Record<string, number> = { draft: 1, submit: 3 };
+        const referralStatus = referralStatusMap[saveType] ?? 3;
+
+        // ── referralType (like Nuxt createReferralTypeField) ──
+        const referralTypeMap: Record<string, number> = {
+          referOut: 1, referBack: 2, requestReferOut: 5, requestReferBack: 6,
+        };
+        const isDraft = referInfo?.referralStatus?.name === "ฉบับร่าง";
+        const referralTypeValue = isDraft ? undefined : (referralTypeMap[kind] ?? 0);
+
+        // ── appointmentData from branchData query param ──
+        let appointmentData: any[] = [];
+        try {
+          const branchDataParam = searchParams.get("branchData");
+          if (branchDataParam) {
+            const branches = JSON.parse(branchDataParam);
+            appointmentData = branches.map((b: any) => ({
+              appointmentType: b.appointment ?? 1,
+              doctorBranchName: b.name || "",
+              appointmentDate: b.appointmentDate || "",
+              remark: b.remark || "",
+            }));
+          }
+        } catch { /* ignore parse error */ }
+
+        // ── deliveryPointTypeEnd from referPoint query param ──
+        const deliveryPointTypeEnd = referPointParam ? parseInt(referPointParam, 10) : undefined;
+
+        // ── Build payload matching Nuxt's saveData structure ──
+        const payload: any = {
+          // Hospital fields – Nuxt swaps: fromHospital = toHospitalId, toHospital = fromHospitalId
+          fromHospital: toHospitalId,
+          toHospital: fromHospitalId,
+          referralKind: 3, // OPD
+          referralStatus,
+          ...(referralTypeValue !== undefined ? { referralType: referralTypeValue } : {}),
+
+          // Delivery points
+          deliveryPointTypeEnd: deliveryPointTypeEnd || undefined,
+          deliveryPointTypeStart: formData.referralCreationPoint || undefined,
+
+          // Appointment
+          appointmentData,
+
+          // Doctor info
+          doctor: formData.prescribingDoctor || undefined,
+          doctorName: formData.docterName || undefined,
+          doctorIdentifyNumber: formData.doctorCode || undefined,
+          doctorDepartment: formData.medicalDepartment || undefined,
+          doctorPhone: formData.doctorContactNumber ? String(formData.doctorContactNumber) : undefined,
+
+          // Referral details
+          referralCause: formData.referral_cause || formData.referralCause || undefined,
+          acuteLevel: formData.acute_level || formData.levelOfUrgency || undefined,
+          contagious: formData.is_infectious === "true" || formData.is_infectious === true,
+          moreDetail: formData.infectious_detail || formData.additionalComments || undefined,
+          remark: formData.notes || undefined,
+          reasonForSending: formData.notes || undefined,
+
+          // Patient identifiers
+          HN: formData.patient_hn || undefined,
+          VN: formData.patient_vn || undefined,
+          AN: formData.patient_an || undefined,
+
+          // Nested patient + visit data (matching Nuxt structure)
+          data: {
+            patient: {
+              patient_pid: formData.patient_pid || "",
+              patient_prefix: formData.patient_prefix || "",
+              patient_firstname: formData.patient_firstname || "",
+              patient_lastname: formData.patient_lastname || "",
+              patient_birthday: formData.patient_birthday || "",
+              patient_sex: formData.patient_sex || "",
+              patient_blood_group: formData.patient_blood_group || "",
+              patient_treatment: formData.patient_treatment || "",
+              patient_treatment_hospital: formData.patient_treatment_hospital || "",
+              patient_house: formData.patient_house || "",
+              patient_moo: formData.patient_moo || "",
+              patient_tambon: formData.patient_tambon || "",
+              patient_amphur: formData.patient_amphur || "",
+              patient_alley: formData.patient_alley || "",
+              patient_road: formData.patient_road || "",
+              patient_changwat: formData.patient_changwat || "",
+              patient_zip_code: formData.patient_zipcode || "",
+              patient_mobile_phone: formData.patient_phone || "",
+              patient_contact_full_name: formData.emergency_contacts?.[0]?.name || "",
+              patient_contact_mobile_phone: formData.emergency_contacts?.[0]?.phone || "",
+              patient_contact_relation: formData.emergency_contacts?.[0]?.relation || "",
+              patient_personal_disease: "",
+            },
+            physicalExam: formData.physicalExam || undefined,
+            disease: formData.diseases || undefined,
+            drugAllergy: formData.drugAllergy || [],
+            diagnosis: (formData.icd10 || []).map((item: any) => ({
+              icd10_code: item.code || item.icd10_code || "",
+              icd10_desc: item.name || item.icd10_desc || "",
+            })),
+            vaccines: formData.vaccines || [],
+            visitData: {
+              temperature: formData.temperature || "",
+              bps: formData.bps || "",
+              bpd: formData.bpd || "",
+              pulse: formData.pulse || "",
+              rr: formData.rr || "",
+              visit_primary_symptom_main_symptom: formData.visit_primary_symptom_main_symptom || "",
+              visit_primary_symptom_current_illness: formData.visit_primary_symptom_current_illness || "",
+              pe: formData.pe || "",
+              Imp: formData.Imp || "",
+              moreDetail: formData.moreDetail || "",
+              icd10Basic: formData.icd10Basic || "",
+              icd10: formData.icd10 || "",
+              icd10MoreBasic: formData.icd10MoreBasic || "",
+              icd10More: formData.icd10More || "",
+            },
+            drugs: formData.medicines || [],
+          },
+          referralFiles: (formData.documents || []).map((doc: any) => ({
+            id: null, // New documents get null ID; server assigns real ID
+            isDelete: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: "currentUser",
+            code: doc.docCode || undefined,
+            name: doc.fileType || undefined,
+            detail: doc.detail || undefined,
+            url: (doc.files || []).map((f: any) => ({
+              url: f.url || "",
+              name: f.name || f.fileName || "",
+              size: f.size || "",
+            })),
+            textContent: "",
+            clinicName: null,
+          })),
         };
 
+        // Run API call + minimum overlay time in parallel
+        const overlayMinTime = new Promise((r) => setTimeout(r, 1500));
+
         if (draftId && referInfo?.id) {
-          await updateReferralDocument(referInfo.id, payload);
+          await Promise.all([updateReferralDocument(referInfo.id, payload), overlayMinTime]);
         } else {
-          await createReferralDocument(payload);
+          await Promise.all([createReferralDocument(payload), overlayMinTime]);
         }
-        router.push("/follow-delivery");
+
+        // Hide overlay, show success toast
+        setShowLoadingOverlay(false);
+        setToastSeverity("success");
+        setToastMessage(
+          saveType === "draft"
+            ? "บันทึกฉบับร่างเรียบร้อย"
+            : "บันทึกและส่งตัวเรียบร้อย"
+        );
+        setToastOpen(true);
+
+        // Navigate after 1.5 second delay so user can see the toast
+        setTimeout(() => {
+          if (kind === "requestReferOut" || kind === "requestReferBack") {
+            router.push("/request-refer-out/all");
+          } else {
+            router.push("/follow-delivery");
+          }
+        }, 1500);
       } catch (err: any) {
         console.error("Save error:", err);
-        alert(err?.message || "ไม่สามารถบันทึกข้อมูลได้");
+        setShowLoadingOverlay(false);
+        setToastSeverity("error");
+        setToastMessage(err?.response?.data?.message || err?.message || "ไม่สามารถบันทึกข้อมูลได้");
+        setToastOpen(true);
       } finally {
         setIsLoading(false);
         setSendData(false);
       }
     },
-    [isLoading, sendData, formData, kind, hospitalParam, hospitalIDParam, branchNamesParam, draftId, referInfo, createReferralDocument, updateReferralDocument, router]
+    [isLoading, sendData, formData, kind, hospitalParam, hospitalIDParam, branchNamesParam, draftId, referInfo, referPointParam, searchParams, createReferralDocument, updateReferralDocument, router, validateRequiredFields]
   );
 
   const totalPages = Math.max(1, Math.ceil(hospitalTotalCount / limit));
@@ -346,6 +570,80 @@ function RequestReferralInner() {
 
   return (
     <Box sx={{ width: "100%" }}>
+      {/* ── Full-screen Loading Overlay (ECG heartbeat animation matching Nuxt) ── */}
+      {showLoadingOverlay && (
+        <>
+          <style>{`
+            @keyframes ecgPulse {
+              0% { clip: rect(0, 0, 100px, 0); opacity: 0.4; }
+              4% { clip: rect(0, 66.667px, 100px, 0); opacity: 0.6; }
+              15% { clip: rect(0, 133.333px, 100px, 0); opacity: 0.8; }
+              20% { clip: rect(0, 300px, 100px, 0); opacity: 1; }
+              80% { clip: rect(0, 300px, 100px, 0); opacity: 0; }
+              90% { opacity: 0; }
+              100% { clip: rect(0, 300px, 100px, 0); opacity: 0; }
+            }
+          `}</style>
+          <Box
+            sx={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              bgcolor: "rgba(0, 0, 0, 0.7)",
+              zIndex: 9999,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {/* ECG Pulse animation */}
+            <div
+              style={{
+                height: 100,
+                width: 200,
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  display: "block",
+                  background: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><polyline fill="none" stroke-width="3px" stroke="%232fd897" points="2.4,58.7 70.8,58.7 76.1,46.2 81.1,58.7 89.9,58.7 93.8,66.5 102.8,22.7 110.6,78.7 115.3,58.7 126.4,58.7 134.4,54.7 142.4,58.7 197.8,58.7"/></svg>') 0 0 no-repeat`,
+                  width: "100%",
+                  height: "100%",
+                  position: "absolute",
+                  animation: "ecgPulse 2s linear infinite",
+                  clip: "rect(0, 0, 100px, 0)",
+                }}
+              />
+            </div>
+            <Typography sx={{ color: "#2fd897", fontSize: "1rem", mt: 1 }}>
+              กำลังโหลดข้อมูล กรุณารอสักครู่
+            </Typography>
+          </Box>
+        </>
+      )}
+
+      {/* ── Success / Error Toast (matching Nuxt's toast) ── */}
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={3000}
+        onClose={() => setToastOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setToastOpen(false)}
+          severity={toastSeverity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {toastMessage}
+        </Alert>
+      </Snackbar>
+
       {/* Header */}
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -645,6 +943,7 @@ function RequestReferralInner() {
             searchParams={Object.fromEntries(searchParams.entries())}
             formData={formData}
             onUpdate={updateFormData}
+            formErrors={formErrors}
           />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>

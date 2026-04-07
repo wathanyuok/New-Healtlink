@@ -82,17 +82,33 @@ export default function StatisticReport({ role, dashboardType }: Props) {
     if (!s || typeof s !== "object") return [];
     const titleMap: Record<string, string> = { accept: "รับเข้ารักษา", reject: "ปฏิเสธรักษา", waiting: "รอตอบรับ" };
     const iconMap: Record<string, string> = { accept: "/images/IconAdmit.svg", reject: "/images/IconRF.svg", waiting: "/images/IconPENDING.svg" };
-    return Object.entries(s).map(([key, item]: [string, any]) => ({
-      titleKey: key, title: titleMap[key] || key, icon: iconMap[key],
-      total: item.total, percent: item.percentage || "100.00%",
-      referIn: { value: item.referIn, percent: item.referInPercentage },
-      referOut: { value: item.referOut, percent: item.referOutPercentage },
-      breakdown: [
-        { name: "OPD", value: item.breakdown?.opd || 0, percent: item.breakdown?.opdPercentage || "0.00%" },
-        { name: "IPD", value: item.breakdown?.ipd || 0, percent: item.breakdown?.ipdPercentage || "0.00%" },
-        { name: "ER", value: item.breakdown?.emergency || 0, percent: item.breakdown?.emergencyPercentage || "0.00%" },
-      ],
-    }));
+    return Object.entries(s).map(([key, item]: [string, any]) => {
+      const bd = item.breakdown || {};
+      return {
+        titleKey: key, title: titleMap[key] || key, icon: iconMap[key],
+        total: item.total, percent: item.percentage || "100.00%",
+        referIn: { value: item.referIn, percent: item.referInPercentage },
+        referOut: { value: item.referOut, percent: item.referOutPercentage },
+        // รวม OPD/IPD/ER (เดิม)
+        breakdown: [
+          { name: "OPD", value: bd.opd || 0, percent: bd.opdPercentage || "0.00%" },
+          { name: "IPD", value: bd.ipd || 0, percent: bd.ipdPercentage || "0.00%" },
+          { name: "ER", value: bd.emergency || 0, percent: bd.emergencyPercentage || "0.00%" },
+        ],
+        // แยก Refer In per OPD/IPD/ER
+        breakdownReferIn: [
+          { name: "OPD", value: bd.opdReferIn ?? 0, percent: bd.opdReferInPercentage || "0.00%" },
+          { name: "IPD", value: bd.ipdReferIn ?? 0, percent: bd.ipdReferInPercentage || "0.00%" },
+          { name: "ER", value: bd.emergencyReferIn ?? 0, percent: bd.emergencyReferInPercentage || "0.00%" },
+        ],
+        // แยก Refer Out per OPD/IPD/ER
+        breakdownReferOut: [
+          { name: "OPD", value: bd.opdReferOut ?? 0, percent: bd.opdReferOutPercentage || "0.00%" },
+          { name: "IPD", value: bd.ipdReferOut ?? 0, percent: bd.ipdReferOutPercentage || "0.00%" },
+          { name: "ER", value: bd.emergencyReferOut ?? 0, percent: bd.emergencyReferOutPercentage || "0.00%" },
+        ],
+      };
+    });
   }, [data]);
 
   const clearFilters = () => setFilters({ zone: null, type: null, name: null, region: null, level: null });
@@ -236,7 +252,8 @@ export default function StatisticReport({ role, dashboardType }: Props) {
         {/* Status Cards */}
         {statusCards.map(card => (
           <Card variant="outlined" sx={{ borderRadius: 3 }} key={card.titleKey}>
-            <CardContent>
+            <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              {/* Title row */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                 <Box sx={{ width: 28, height: 28, position: "relative" }}>
                   <Image src={card.icon} alt={card.title} fill style={{ objectFit: "contain" }} />
@@ -244,19 +261,21 @@ export default function StatisticReport({ role, dashboardType }: Props) {
                 <Typography sx={{ color: "#036245", fontSize: 18, fontWeight: 700 }}>{card.title}</Typography>
               </Box>
 
-              {/* Refer In / Out with gradient badges */}
-              <Stack direction="row" justifyContent={dashboardType === "refer-in" ? "flex-start" : "flex-end"} sx={{ mb: 2 }}>
-                {/* Refer In - left */}
+              {/* Refer In / Out row with circular badges */}
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+                {/* Refer In */}
                 {dashboardType !== "refer-out" && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: dashboardType === "all" ? "auto" : 0 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">Refer In</Typography>
-                      <Typography fontWeight={700}>{card.referIn?.value ?? 0}</Typography>
+                      <Typography variant="caption" sx={{ color: "#6b7280", fontSize: 12 }}>Refer In</Typography>
+                      <Typography sx={{ fontWeight: 700, fontSize: 20, lineHeight: 1.2 }}>{card.referIn?.value ?? 0}</Typography>
                     </Box>
                     <Box sx={{
-                      background: GRADIENT_BADGE, borderRadius: 2,
-                      width: 44, height: 44,
+                      background: "linear-gradient(135deg, #24d89d 0%, #46bee8 100%)",
+                      borderRadius: "50%",
+                      width: 48, height: 48,
                       display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
                     }}>
                       <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
                         {parsePercent(card.referIn?.percent)}%
@@ -264,17 +283,19 @@ export default function StatisticReport({ role, dashboardType }: Props) {
                     </Box>
                   </Box>
                 )}
-                {/* Refer Out - right */}
+                {/* Refer Out */}
                 {dashboardType !== "refer-in" && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                     <Box textAlign="right">
-                      <Typography variant="caption" color="text.secondary">Refer Out</Typography>
-                      <Typography fontWeight={700}>{card.referOut?.value ?? 0}</Typography>
+                      <Typography variant="caption" sx={{ color: "#6b7280", fontSize: 12 }}>Refer Out</Typography>
+                      <Typography sx={{ fontWeight: 700, fontSize: 20, lineHeight: 1.2 }}>{card.referOut?.value ?? 0}</Typography>
                     </Box>
                     <Box sx={{
-                      background: GRADIENT_BADGE, borderRadius: 2,
-                      width: 44, height: 44,
+                      background: "linear-gradient(135deg, #46bee8 0%, #7dd3c0 100%)",
+                      borderRadius: "50%",
+                      width: 48, height: 48,
                       display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
                     }}>
                       <Typography sx={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
                         {parsePercent(card.referOut?.percent)}%
@@ -284,23 +305,53 @@ export default function StatisticReport({ role, dashboardType }: Props) {
                 )}
               </Stack>
 
-              {/* Breakdown OPD/IPD/ER */}
-              <Stack direction="row" spacing={1}>
-                {card.breakdown.map(item => (
-                  <Box key={item.name} sx={{
-                    flex: 1, border: "1px solid #00B894", borderRadius: 2, p: 1,
-                    textAlign: "center",
-                  }}>
-                    <Typography variant="caption" color="text.secondary">{item.name}</Typography>
-                    <Typography fontWeight={700} fontSize={16}>{item.value}</Typography>
-                    <Chip
-                      label={`${parsePercent(item.percent)}%`}
-                      size="small"
-                      sx={{ bgcolor: "#d0fbe4", fontSize: 11, fontWeight: 600, height: 22, mt: 0.5 }}
-                    />
+              {/* Breakdown OPD / IPD / ER — แยก Refer In / Refer Out */}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                {/* Refer In breakdown */}
+                {dashboardType !== "refer-out" && (
+                  <Box>
+                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: "#047857", mb: 0.5 }}>Refer In</Typography>
+                    <Stack direction="row" spacing={1}>
+                      {card.breakdownReferIn.map(item => (
+                        <Box key={item.name} sx={{
+                          flex: 1, border: "1px solid #d1fae5", borderRadius: 2, py: 0.75, px: 0.5,
+                          textAlign: "center", bgcolor: "#f0fdf4",
+                        }}>
+                          <Typography sx={{ color: "#6b7280", fontSize: 11, fontWeight: 500 }}>{item.name}</Typography>
+                          <Typography sx={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{item.value}</Typography>
+                          <Chip
+                            label={`${parsePercent(item.percent)}%`}
+                            size="small"
+                            sx={{ bgcolor: "#d0fbe4", color: "#047857", fontSize: 10, fontWeight: 600, height: 20, mt: 0.25 }}
+                          />
+                        </Box>
+                      ))}
+                    </Stack>
                   </Box>
-                ))}
-              </Stack>
+                )}
+                {/* Refer Out breakdown */}
+                {dashboardType !== "refer-in" && (
+                  <Box>
+                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: "#0369a1", mb: 0.5 }}>Refer Out</Typography>
+                    <Stack direction="row" spacing={1}>
+                      {card.breakdownReferOut.map(item => (
+                        <Box key={item.name} sx={{
+                          flex: 1, border: "1px solid #bae6fd", borderRadius: 2, py: 0.75, px: 0.5,
+                          textAlign: "center", bgcolor: "#f0f9ff",
+                        }}>
+                          <Typography sx={{ color: "#6b7280", fontSize: 11, fontWeight: 500 }}>{item.name}</Typography>
+                          <Typography sx={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{item.value}</Typography>
+                          <Chip
+                            label={`${parsePercent(item.percent)}%`}
+                            size="small"
+                            sx={{ bgcolor: "#dbeafe", color: "#1d4ed8", fontSize: 10, fontWeight: 600, height: 20, mt: 0.25 }}
+                          />
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+              </Box>
             </CardContent>
           </Card>
         ))}

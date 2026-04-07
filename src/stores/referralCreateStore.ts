@@ -150,23 +150,40 @@ interface ReferralCreateState {
 /* ------------------------------------------------------------------ */
 
 const defaultFormData: FormDataType = {
-  patient_pid: "",
-  patient_prefix: "",
-  patient_firstname: "",
-  patient_lastname: "",
-  patient_birthday: "",
+  patient_pid: "1234567890123",
+  patient_prefix: "นาย",
+  patient_firstname: "ทดสอบ",
+  patient_lastname: "ระบบ",
+  patient_birthday: "1990-05-15",
+  patient_age: "36",
+  patient_sex: "ชาย",
+  patient_blood_group: "O",
+  patient_hn: "HN001234",
+  patient_treatment: "บัตรทอง",
+  patient_phone: "0812345678",
   certificationPeriod: "",
   startDate: "",
   startTime: "",
   referralCreationPoint: "",
   prescribingDoctor: "",
-  referralCause: "",
-  levelOfUrgency: "",
+  doctorCode: "D12345",
+  medicalDepartment: "อายุรกรรม",
+  doctorContactNumber: "0891112222",
+  referral_cause: "",
+  referral_reason: "ส่งต่อเพื่อรับการรักษา",
+  acute_level: "5",
+  referralCause: "ต้องการการรักษาเฉพาะทาง",
+  levelOfUrgency: "5",
   icuLevel: "",
-  visit_primary_symptom_main_symptom: "",
-  visit_primary_symptom_current_illness: "",
-  pe: "",
-  Imp: "",
+  visit_primary_symptom_main_symptom: "ปวดท้อง",
+  visit_primary_symptom_current_illness: "ปวดท้องบริเวณลิ้นปี่ 2 วัน มีอาเจียน",
+  pe: "Abdomen: mild tenderness at epigastric area",
+  Imp: "R/O Gastritis",
+  temperature: "36.5",
+  bps: "120",
+  bpd: "80",
+  pulse: "72",
+  rr: "18",
   deliveryPeriod: [],
   treatment: "",
   icd10: [],
@@ -360,14 +377,33 @@ export const useReferralCreateStore = create<ReferralCreateState>((set, get) => 
         ...params,
         limit: params.limit ?? 50,
         offset: params.offset ?? 1,
+        permissionName: "referOut_opd_create",
+        position: [
+          "DENTIST",
+          "DOCTOR",
+          "MEDICAL_TECH",
+          "NURSE",
+          "PHARMACIST",
+          "PHYSIO",
+          "TRADITIONAL_MED",
+          "AUDITOR",
+        ],
       });
-      const users = (res?.users || []).map((u: any) => ({
-        id: u.id,
-        name: u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        email: u.email || "",
-        phone: u.phone || "",
-        licenseNumber: u.licenseNumber || u.doctorCode || "",
-      }));
+      const users = (res?.users || []).map((u: any) => {
+        // Build display name with prefix like Nuxt version: "พญ.. เอ ทดสอบ"
+        let displayName = u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim();
+        if (u.prefix) {
+          const nameParts = [u.firstName, u.middleName, u.lastName].filter(Boolean).join(" ");
+          displayName = nameParts ? `${u.prefix}. ${nameParts}` : displayName;
+        }
+        return {
+          id: u.id,
+          name: displayName,
+          email: u.email || "",
+          phone: u.phone || "",
+          licenseNumber: u.identifyNumber || u.licenseNumber || u.doctorCode || "",
+        };
+      });
       set({ doctorUsers: users });
       return users;
     } catch (err) {
