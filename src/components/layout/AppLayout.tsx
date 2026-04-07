@@ -25,11 +25,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           component="main"
           sx={{
             ml: `${DRAWER_COLLAPSED}px`,
-            pt: `${NAVBAR_HEIGHT}px`,
-            p: 3,
-            paddingTop: `calc(${NAVBAR_HEIGHT}px + 24px)`,
-            minHeight: `calc(100vh - ${NAVBAR_HEIGHT}px)`,
+            px: 3,
+            pb: 3,
+            pt: `calc(${NAVBAR_HEIGHT}px + 24px)`,
+            height: "100vh",
             overflow: "auto",
+            boxSizing: "border-box",
           }}
         >
           {children}

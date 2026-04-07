@@ -151,10 +151,8 @@ const allMenuItems: MenuItem[] = [
   },
 ];
 
-// แสดงเฉพาะเมนู Dashboard (แดชบอร์ดรวม, Refer In, Refer Out) สำหรับ demo
-const VISIBLE_PATHS = new Set(["/dashboard"]);
-
-const menuItems: MenuItem[] = allMenuItems.filter((item) => VISIBLE_PATHS.has(item.path));
+// แสดงเมนูทั้งหมด
+const menuItems: MenuItem[] = allMenuItems;
 
 const enabledPaths = new Set(
   menuItems.flatMap((item) => [
