@@ -451,19 +451,28 @@ export default function RequestReferralForm({
   const { referralCauses, doctorUsers, fetchReferralCauses, fetchDoctorUsers } =
     useReferralCreateStore();
 
+  // Subscribe reactively so useEffect re-runs when navbar hospital changes
+  const optionHospital = useAuthStore((s) => s.optionHospital);
+  const authProfile = useAuthStore((s) => s.profile);
+
   useEffect(() => {
-    // Get user's hospital for API calls
     const authState = useAuthStore.getState();
     const roleName = authState.getRoleName();
     let userHospitalId: string | undefined;
     if (roleName === "superAdmin") {
-      userHospitalId = authState.optionHospital ? String(authState.optionHospital) : undefined;
+      userHospitalId = optionHospital ? String(optionHospital) : undefined;
     } else {
-      const ownHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id;
+      const ownHospitalId = (authProfile as any)?.permissionGroup?.hospital?.id;
       userHospitalId = ownHospitalId ? String(ownHospitalId) : undefined;
     }
 
-    // Fetch referral causes
+    // If no valid hospital (e.g. superAdmin hasn't picked one in navbar),
+    // clear the dropdowns and skip fetch — matches Nuxt behavior.
+    if (!userHospitalId) {
+      useReferralCreateStore.setState({ doctorUsers: [], referralCauses: [] });
+      return;
+    }
+
     const referralType = kind === "requestReferOut" || kind === "referOut"
       ? "Refer Out - ส่งตัวออก"
       : "Refer Back - ส่งตัวกลับ";
@@ -473,32 +482,13 @@ export default function RequestReferralForm({
       isOpd: "true",
     });
 
-    // Fetch doctor users (prescribing doctor dropdown)
     fetchDoctorUsers({
       hospital: userHospitalId,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind]);
+  }, [kind, optionHospital, authProfile]);
 
-  // Auto-select first doctor when doctorUsers loads (for testing defaults)
-  useEffect(() => {
-    if (doctorUsers.length > 0 && !doctorUsers.find((d) => String(d.id) === String(form.prescribingDoctor))) {
-      const first = doctorUsers[0];
-      updateField("prescribingDoctor" as any, String(first.id));
-      updateField("docterName" as any, first.name || "");
-      if (first.licenseNumber) updateField("doctorCode" as any, first.licenseNumber);
-      if (first.phone) updateField("doctorContactNumber" as any, first.phone);
-    }
-  }, [doctorUsers]);
-
-  // Auto-select first referral cause when referralCauses loads (for testing defaults)
-  useEffect(() => {
-    if (referralCauses.length > 0 && !referralCauses.find((c) => String(c.id) === String(form.referral_cause))) {
-      updateField("referral_cause", String(referralCauses[0].id));
-    }
-  }, [referralCauses]);
-
-  // Branch data from query params (branchData is JSON array from DoctorBranchSelector)
+// Branch data from query params (branchData is JSON array from DoctorBranchSelector)
   const branchList = (() => {
     try {
       if (searchParams.branchData) {
