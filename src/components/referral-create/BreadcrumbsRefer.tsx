@@ -6,10 +6,13 @@ import { NavigateNext } from "@mui/icons-material";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+type BreadcrumbStatus = "visited" | "current" | "future";
+
 interface BreadcrumbItem {
   name: string;
   path?: string;
   isActive?: boolean;
+  status?: BreadcrumbStatus;
 }
 
 interface BreadcrumbsReferProps {
@@ -52,21 +55,52 @@ export default function BreadcrumbsRefer({ basePath, kind, items }: BreadcrumbsR
     return crumbs;
   }
 
+  // Determine the current step index: first item with status "current" OR with isActive
+  const currentIdx = (() => {
+    const byStatus = breadcrumbs.findIndex((c) => c.status === "current");
+    if (byStatus !== -1) return byStatus;
+    const byActive = breadcrumbs.findIndex((c) => c.isActive);
+    return byActive !== -1 ? byActive : breadcrumbs.length - 1;
+  })();
+
+  const resolveStatus = (crumb: BreadcrumbItem, index: number): BreadcrumbStatus => {
+    if (crumb.status) return crumb.status;
+    if (index === currentIdx) return "current";
+    if (index < currentIdx) return "visited";
+    return "future";
+  };
+
+  const styleFor = (status: BreadcrumbStatus) => {
+    if (status === "current") {
+      return { color: "#111827", fontWeight: 600 };
+    }
+    if (status === "visited") {
+      return { color: "#00AF75", fontWeight: 500 };
+    }
+    return { color: "#9ca3af", fontWeight: 400 };
+  };
+
   return (
     <Box sx={{ mt: 2 }}>
-      <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+      <Breadcrumbs separator={<NavigateNext fontSize="small" sx={{ color: "#9ca3af" }} />} aria-label="breadcrumb">
         {breadcrumbs.map((crumb, index) => {
-          const isLast = index === breadcrumbs.length - 1;
-          const isActive = crumb.isActive || isLast;
+          const status = resolveStatus(crumb, index);
+          const style = styleFor(status);
 
-          if (crumb.path && !isActive) {
+          // Clickable only when visited and has a path
+          if (status === "visited" && crumb.path) {
             return (
               <MuiLink
                 key={index}
                 component={Link}
                 href={crumb.path}
                 underline="hover"
-                sx={{ color: "#6b7280", fontSize: "0.875rem" }}
+                sx={{
+                  fontSize: "0.875rem",
+                  fontFamily: "Sarabun, sans-serif",
+                  ...style,
+                  "&:hover": { color: "#036245" },
+                }}
               >
                 {crumb.name}
               </MuiLink>
@@ -78,8 +112,10 @@ export default function BreadcrumbsRefer({ basePath, kind, items }: BreadcrumbsR
               key={index}
               sx={{
                 fontSize: "0.875rem",
-                color: isActive ? "#00AF75" : "#6b7280",
-                fontWeight: isActive ? 600 : 400,
+                fontFamily: "Sarabun, sans-serif",
+                ...style,
+                cursor: status === "future" ? "default" : undefined,
+                pointerEvents: status === "future" ? "none" : undefined,
               }}
             >
               {crumb.name}

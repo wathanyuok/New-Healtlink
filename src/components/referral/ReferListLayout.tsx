@@ -30,6 +30,7 @@ import { useReferralStore } from "@/stores/referralStore";
 import { useHospitalFormOptionsAll } from "@/hooks/useHospitalFormOptionsAll";
 import TableReferralList from "./TableReferralList";
 import { headerReferralTable } from "@/data/headerReferralTable";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
 
 type ReferralType =
   | "referIn"
@@ -1136,17 +1137,26 @@ export default function ReferListLayout({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <LoadingOverlay open={isLoadingList || optionsLoading} />
       {/* Create button */}
       {showCreateReferralButton && (
         <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
           <Button
-            variant="outlined"
+            variant="contained"
+            disableElevation
             startIcon={<AddCircleIcon />}
             onClick={gotoCreateReferral}
             sx={{
-              color: "#036245",
-              borderColor: "#036245",
-              "&:hover": { borderColor: "#024D37", bgcolor: "#F0FDF4" },
+              bgcolor: "#16a34a",
+              color: "#fff",
+              fontFamily: "Sarabun, sans-serif",
+              fontWeight: 600,
+              textTransform: "none",
+              borderRadius: "8px",
+              px: 2.5,
+              py: 1,
+              boxShadow: "none",
+              "&:hover": { bgcolor: "#15803d", boxShadow: "none" },
             }}
           >
             {createButtonLabel}
@@ -1154,13 +1164,14 @@ export default function ReferListLayout({
         </Box>
       )}
 
+      {/* Tabs + Paper wrapper — no gap so tabs sit flush against the Paper */}
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {/* Tabs header — Nuxt-style chunky tabs with white active background */}
       <Box
         sx={{
           display: "flex",
           gap: 0,
           alignItems: "flex-end",
-          pl: 1,
         }}
       >
         {visibleTabs.map((t, idx) => {
@@ -1204,7 +1215,7 @@ export default function ReferListLayout({
                   fontFamily: "Sarabun, sans-serif",
                   fontSize: 16,
                   lineHeight: 1.5,
-                  color: isActive ? "#036245" : "#374151",
+                  color: isActive ? "#00AF75" : "#374151",
                   fontWeight: isActive ? 600 : 500,
                   transition: "color 0.2s",
                 }}
@@ -1233,7 +1244,7 @@ export default function ReferListLayout({
       >
         <Typography
           variant="h6"
-          sx={{ color: "#036245", fontWeight: 700, mb: 2 }}
+          sx={{ color: "#00AF75", fontWeight: 700, mb: 2 }}
         >
           {pageName}
         </Typography>
@@ -1416,6 +1427,7 @@ export default function ReferListLayout({
           onPaginationChange={handlePaginationChange}
         />
       </Paper>
+      </Box>
     </Box>
   );
 }

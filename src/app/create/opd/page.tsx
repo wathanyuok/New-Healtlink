@@ -33,6 +33,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import BreadcrumbsRefer from "@/components/referral-create/BreadcrumbsRefer";
 import DeliveryPointSelector from "@/components/referral-create/DeliveryPointSelector";
 import DoctorBranchSelector from "@/components/referral-create/DoctorBranchSelector";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
 import {
   useReferralCreateStore,
   type HospitalOption,
@@ -316,6 +317,7 @@ function OPDReferralInner() {
 
   return (
     <Box sx={{ width: "100%" }}>
+      <LoadingOverlay open={isLoading || loading} />
       {/* Header */}
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>

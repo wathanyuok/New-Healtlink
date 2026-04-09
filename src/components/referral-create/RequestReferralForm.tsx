@@ -24,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   Autocomplete,
+  Tooltip,
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
@@ -35,10 +36,12 @@ import {
   Close as CloseIcon,
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
+  HelpOutline as HelpOutlineIcon,
 } from "@mui/icons-material";
 import { useReferralCreateStore } from "@/stores/referralCreateStore";
 import { useAuthStore } from "@/stores/authStore";
 import ThaiDateInput from "@/components/shared/ThaiDateInput";
+import ThaiTimeInput from "@/components/shared/ThaiTimeInput";
 import api from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
@@ -126,13 +129,20 @@ export interface ReferralFormData {
   patient_phone: string;
   // Emergency contact
   emergency_contacts: EmergencyContact[];
+  // ER-only top-level schedule
+  startDate: string; // yyyy-MM-dd
+  startTime: string; // HH:mm
+  referralCreationPoint: string; // id of selected creation point
   // Referral info (left column)
   referral_cause: string;
   referral_reason: string;
   acute_level: string;
+  icu_level: string;
   additional_info: string;
   is_infectious: string; // "yes" | "no" | ""
   infectious_detail: string;
+  car_refer: string; // "need" | "notNeed" | ""
+  use_nurse: string; // "use" | "notUse" | ""
   additionalComments: string;
   requiredEquipment: EquipmentItem[];
   // Health info
@@ -195,12 +205,18 @@ const defaultFormData: ReferralFormData = {
   doctorCode: "D12345",
   medicalDepartment: "อายุรกรรม",
   doctorContactNumber: "0891112222",
+  startDate: "",
+  startTime: "",
+  referralCreationPoint: "",
   referral_cause: "",
   referral_reason: "ส่งต่อเพื่อรับการรักษา",
   acute_level: "5",
+  icu_level: "",
   additional_info: "",
   is_infectious: "false",
   infectious_detail: "",
+  car_refer: "",
+  use_nurse: "",
   additionalComments: "",
   requiredEquipment: [],
   physicalExam: "",
@@ -253,6 +269,12 @@ const ACUTE_LEVEL_OPTIONS = [
   { value: 3, label: "ผู้ป่วยมีเสถียรภาพ มีความเสี่ยงต่อการทรุดลงเฉียบพลันปานกลาง", badge: "M", color: "#eab308" },
   { value: 4, label: "ผู้ป่วยมีเสถียรภาพ มีความเสี่ยงต่อการทรุดลงเฉียบพลันต่ำ", badge: "L", color: "#22c55e" },
   { value: 5, label: "ผู้ป่วยมีเสถียรภาพ ไม่มีความเสี่ยงต่อการทรุดลงเฉียบพลัน", badge: "N", color: "#6b7280" },
+];
+
+const ICU_LEVEL_OPTIONS = [
+  { value: "1", label: "ICU Level 1" },
+  { value: "2", label: "ICU Level 2" },
+  { value: "3", label: "ICU Level 3" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -455,6 +477,37 @@ export default function RequestReferralForm({
   const optionHospital = useAuthStore((s) => s.optionHospital);
   const authProfile = useAuthStore((s) => s.profile);
 
+  // Referral creation point options (ER only) — keep raw to access phone/phone2
+  const [erReferPoints, setErReferPoints] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (kind !== "referER") return;
+    const authState = useAuthStore.getState();
+    const profile: any = authState.profile;
+    const hospitalId =
+      profile?.permissionGroup?.hospital?.id || optionHospital || null;
+    if (!hospitalId) return;
+    (async () => {
+      try {
+        const res = await api.get(
+          "main-service/referral/deliveryPointTypeStart/find",
+          {
+            params: {
+              useFor: "จุดสร้างใบส่งตัว",
+              hospital: hospitalId,
+              isEr: "true",
+              isActive: "true",
+            },
+          }
+        );
+        setErReferPoints(res.data?.referralDeliveryPointTypeStarts || []);
+      } catch (err) {
+        console.error("Error fetching ER refer points:", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, optionHospital]);
+
   useEffect(() => {
     const authState = useAuthStore.getState();
     const roleName = authState.getRoleName();
@@ -473,13 +526,13 @@ export default function RequestReferralForm({
       return;
     }
 
-    const referralType = kind === "requestReferOut" || kind === "referOut"
+    const referralType = kind === "requestReferOut" || kind === "referOut" || kind === "referER"
       ? "Refer Out - ส่งตัวออก"
       : "Refer Back - ส่งตัวกลับ";
     fetchReferralCauses({
       hospital: userHospitalId,
       referralType,
-      isOpd: "true",
+      isOpd: kind === "referER" ? "false" : "true",
     });
 
     fetchDoctorUsers({
@@ -763,6 +816,36 @@ export default function RequestReferralForm({
           >
             <SectionHeader title="ข้อมูลใบส่งตัว" />
             <Box sx={{ p: 2 }}>
+              {/* ER-only: วันที่ส่งตัว + เวลาที่ส่งตัว — top of section */}
+              {kind === "referER" && (
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                    gap: 2,
+                    mb: 3,
+                  }}
+                >
+                  <Box>
+                    <FieldLabel label="วันที่ส่งตัว" required />
+                    <ThaiDateInput
+                      value={form.startDate}
+                      onChange={(val) => updateField("startDate", val)}
+                      placeholder="เลือกวันที่ส่งตัว"
+                    />
+                  </Box>
+                  <Box>
+                    <FieldLabel label="เวลาที่ส่งตัว" required />
+                    <ThaiTimeInput
+                      value={form.startTime}
+                      onChange={(val) => updateField("startTime", val)}
+                      placeholder="เลือกเวลาที่ส่งตัว"
+                      minWidth="100%"
+                    />
+                  </Box>
+                </Box>
+              )}
+
               {/* ข้อมูลสถานพยาบาล */}
               <Typography
                 sx={{
@@ -791,45 +874,94 @@ export default function RequestReferralForm({
                   >
                     สถานพยาบาลปลายทาง
                   </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        bgcolor: "#e5e7eb",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "0.7rem",
-                        color: "#9ca3af",
-                      }}
+                  {kind === "referER" ? (
+                    <Typography
+                      variant="body2"
+                      sx={{ ml: 2, color: "#EAB308" }}
                     >
-                      40x40
+                      รอตอบรับ
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          bgcolor: "#e5e7eb",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "0.7rem",
+                          color: "#9ca3af",
+                        }}
+                      >
+                        40x40
+                      </Box>
+                      <Typography variant="body2">{hospitalName}</Typography>
                     </Box>
-                    <Typography variant="body2">{hospitalName}</Typography>
-                  </Box>
+                  )}
 
                   <Typography
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     จุดรับใบส่งตัว
                   </Typography>
-                  <Typography variant="body2" sx={{ ml: 2 }}>
-                    {referPointName || "-"}
-                  </Typography>
+                  {kind === "referER" ? (
+                    <Typography
+                      variant="body2"
+                      sx={{ ml: 2, color: "#EAB308" }}
+                    >
+                      รอตอบรับ
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" sx={{ ml: 2 }}>
+                      {referPointName || "-"}
+                    </Typography>
+                  )}
 
                   <Typography
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     จุดสร้างใบส่งตัว
+                    {kind === "referER" && (
+                      <Typography
+                        component="span"
+                        sx={{ color: "#ef4444", ml: 0.5 }}
+                      >
+                        *
+                      </Typography>
+                    )}
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ ml: 2, color: "#EAB308" }}
-                  >
-                    รอยืนยันนัดหมาย
-                  </Typography>
+                  {kind === "referER" ? (
+                    <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                      <Select
+                        value={form.referralCreationPoint}
+                        displayEmpty
+                        onChange={(e) =>
+                          updateField("referralCreationPoint", e.target.value)
+                        }
+                      >
+                        <MenuItem value="" disabled>
+                          <span style={{ color: "#9ca3af" }}>
+                            เลือกจุดสร้างใบส่งตัว
+                          </span>
+                        </MenuItem>
+                        {erReferPoints.map((opt: any) => (
+                          <MenuItem key={opt.id} value={String(opt.id)}>
+                            {opt.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      sx={{ ml: 2, color: "#EAB308" }}
+                    >
+                      รอยืนยันนัดหมาย
+                    </Typography>
+                  )}
                 </Box>
 
                 {/* Right sub-col */}
@@ -841,9 +973,15 @@ export default function RequestReferralForm({
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ ml: 2, mt: 2, color: "#7c3aed" }}
+                    sx={{
+                      ml: 2,
+                      mt: 2,
+                      color: kind === "referER" ? "#F97316" : "#7c3aed",
+                    }}
                   >
-                    OPD - ผู้ป่วยนอก
+                    {kind === "referER"
+                      ? "Emergency - ผู้ฉุกเฉิน"
+                      : "OPD - ผู้ป่วยนอก"}
                   </Typography>
 
                   <Typography
@@ -851,89 +989,202 @@ export default function RequestReferralForm({
                   >
                     เบอร์ติดต่อจุดใบส่งตัว
                   </Typography>
-                  <Typography variant="body2" sx={{ ml: 2 }}>
-                    {referPointPhone ? `${referPointPhone} ต่อ ไม่ระบุ` : "-"}
-                  </Typography>
+                  {kind === "referER" ? (
+                    <Typography
+                      variant="body2"
+                      sx={{ ml: 2, color: "#EAB308" }}
+                    >
+                      รอยืนยันนัดหมาย
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" sx={{ ml: 2 }}>
+                      {referPointPhone ? `${referPointPhone} ต่อ ไม่ระบุ` : "-"}
+                    </Typography>
+                  )}
 
                   <Typography
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     เบอร์ติดต่อจุดสร้างใบส่งตัว
-                    <Typography
-                      component="span"
-                      sx={{ color: "#ef4444", ml: 0.5 }}
-                    >
-                      *
-                    </Typography>
+                    {kind !== "referER" && (
+                      <Typography
+                        component="span"
+                        sx={{ color: "#ef4444", ml: 0.5 }}
+                      >
+                        *
+                      </Typography>
+                    )}
                   </Typography>
-                  <Typography variant="body2" sx={{ ml: 2 }}>
-                    -
-                  </Typography>
+                  {(() => {
+                    if (kind === "referER") {
+                      const selected = erReferPoints.find(
+                        (o: any) =>
+                          String(o.id) === String(form.referralCreationPoint)
+                      );
+                      if (selected && (selected.phone || selected.phone2)) {
+                        return (
+                          <Typography variant="body2" sx={{ ml: 2 }}>
+                            {`${selected.phone || "-"} ต่อ ${
+                              selected.phone2 || "-"
+                            }`}
+                          </Typography>
+                        );
+                      }
+                    }
+                    return (
+                      <Typography variant="body2" sx={{ ml: 2 }}>
+                        -
+                      </Typography>
+                    );
+                  })()}
                 </Box>
               </Box>
 
               {/* สาขา/แผนกปลายทาง */}
-              <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }}>
-                <Typography
+              {kind === "referER" ? (
+                searchParams?.branch_names !== "false" && (
+                  <>
+                    <Box
+                      sx={{
+                        borderBottom: "2px solid #16a34a",
+                        mb: 2,
+                        pb: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: "#036245",
+                          fontSize: "1rem",
+                          fontWeight: 400,
+                          ml: 1,
+                        }}
+                      >
+                        สาขา/แผนกปลายทาง (
+                        <Typography
+                          component="span"
+                          sx={{
+                            color: "#036245",
+                            fontSize: "0.875rem",
+                            fontWeight: 400,
+                          }}
+                        >
+                          อนุญาติให้ส่งต่อสาขาอื่น
+                        </Typography>
+                        )
+                      </Typography>
+                      <Tooltip
+                        title="สามารถพิจารณาปรับเปลี่ยนสาขาที่ส่งต่อ จากที่ต้นทางกำหนดมาได้ถ้าต้นทางอนุญาต"
+                        placement="top"
+                        arrow
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              fontSize: "1rem",
+                              lineHeight: 1.6,
+                              padding: "14px 18px",
+                              maxWidth: 460,
+                              bgcolor: "rgba(0,0,0,0.88)",
+                              fontWeight: 500,
+                            },
+                          },
+                          arrow: { sx: { color: "rgba(0,0,0,0.88)" } },
+                        }}
+                      >
+                        <IconButton size="small" sx={{ color: "#9ca3af" }}>
+                          <HelpOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <Box sx={{ p: 2, mb: 3 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: "#64748B",
+                          fontWeight: 500,
+                          fontSize: "0.95rem",
+                          mb: 1,
+                        }}
+                      >
+                        สาขา/แผนกที่ส่งต่อ
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ ml: 2, color: "#EAB308" }}
+                      >
+                        รอตอบรับ
+                      </Typography>
+                    </Box>
+                  </>
+                )
+              ) : (
+                <>
+                  <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }}>
+                    <Typography
+                      sx={{
+                        fontWeight: 500,
+                        color: "#036245",
+                        fontSize: "1rem",
+                        mb: 1,
+                      }}
+                    >
+                      สาขา/แผนกปลายทาง
+                    </Typography>
+                  </Box>
+                <TableContainer
                   sx={{
-                    fontWeight: 500,
-                    color: "#036245",
-                    fontSize: "1rem",
-                    mb: 1,
+                    boxShadow: "none",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 1,
+                    mb: 3,
                   }}
                 >
-                  สาขา/แผนกปลายทาง
-                </Typography>
-              </Box>
-
-              <TableContainer
-                sx={{
-                  boxShadow: "none",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 1,
-                  mb: 3,
-                }}
-              >
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                      <TableCell
-                        sx={{ fontWeight: 600, textAlign: "center", width: 60 }}
-                      >
-                        ลำดับ
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        สาขา/แผนกที่ส่งต่อ
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        วัน/เวลานัดหมาย
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>หมายเหตุ</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {branchList.map((branch) => (
-                      <TableRow key={branch.index}>
-                        <TableCell align="center">{branch.index}</TableCell>
-                        <TableCell>{branch.name}</TableCell>
-                        <TableCell>
-                          {formatBranchDateTime(branch)}
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: "#f9fafb" }}>
+                        <TableCell
+                          sx={{
+                            fontWeight: 600,
+                            textAlign: "center",
+                            width: 60,
+                          }}
+                        >
+                          ลำดับ
                         </TableCell>
-                        <TableCell>{branch.remark || "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                    {branchList.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center" sx={{ py: 2 }}>
-                          <Typography variant="body2" color="textSecondary">
-                            ไม่มีข้อมูล
-                          </Typography>
+                        <TableCell sx={{ fontWeight: 600 }}>
+                          สาขา/แผนกที่ส่งต่อ
                         </TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>
+                          วัน/เวลานัดหมาย
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>หมายเหตุ</TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {branchList.map((branch) => (
+                        <TableRow key={branch.index}>
+                          <TableCell align="center">{branch.index}</TableCell>
+                          <TableCell>{branch.name}</TableCell>
+                          <TableCell>{formatBranchDateTime(branch)}</TableCell>
+                          <TableCell>{branch.remark || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                      {branchList.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} align="center" sx={{ py: 2 }}>
+                            <Typography variant="body2" color="textSecondary">
+                              ไม่มีข้อมูล
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                </>
+              )}
 
               {/* ข้อมูลผู้สร้างใบส่งตัว */}
               <Box sx={{ borderBottom: "2px solid #16a34a", mt: 2, mb: 2 }}>
@@ -1181,6 +1432,31 @@ export default function RequestReferralForm({
                 )}
               </Box>
 
+              {/* ระดับคนไข้ ICU — เฉพาะ ER */}
+              {kind === "referER" && (
+                <Box sx={{ mb: 2 }}>
+                  <FieldLabel label="ระดับคนไข้ ICU" required />
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={form.icu_level}
+                      displayEmpty
+                      onChange={(e) =>
+                        updateField("icu_level", e.target.value)
+                      }
+                    >
+                      <MenuItem value="" disabled>
+                        <span style={{ color: "#9ca3af" }}>เลือกระดับ</span>
+                      </MenuItem>
+                      {ICU_LEVEL_OPTIONS.map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
+
               {/* ข้อมูลเพิ่มเติม */}
               <Typography
                 sx={{
@@ -1233,6 +1509,63 @@ export default function RequestReferralForm({
                   />
                 )}
               </Box>
+
+              {/* ใช้รถส่งตัว + ใช้พยาบาล — เฉพาะ ER */}
+              {kind === "referER" && (
+                <>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      sx={{ fontWeight: 500, fontSize: "0.95rem", mb: 1 }}
+                    >
+                      ใช้รถส่งตัว
+                    </Typography>
+                    <RadioGroup
+                      row
+                      value={form.car_refer}
+                      onChange={(e) =>
+                        updateField("car_refer", e.target.value)
+                      }
+                    >
+                      <FormControlLabel
+                        value="need"
+                        control={<Radio size="small" />}
+                        label="ต้องการใช้"
+                      />
+                      <FormControlLabel
+                        value="notNeed"
+                        control={<Radio size="small" />}
+                        label="ไม่ต้องการใช้"
+                      />
+                    </RadioGroup>
+                  </Box>
+
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      sx={{ fontWeight: 500, fontSize: "0.95rem", mb: 1 }}
+                    >
+                      ใช้พยาบาลที่จุดรับส่ง
+                    </Typography>
+                    <RadioGroup
+                      row
+                      value={form.use_nurse}
+                      onChange={(e) =>
+                        updateField("use_nurse", e.target.value)
+                      }
+                    >
+                      <FormControlLabel
+                        value="use"
+                        control={<Radio size="small" />}
+                        label="ใช้"
+                      />
+                      <FormControlLabel
+                        value="notUse"
+                        control={<Radio size="small" />}
+                        label="ไม่ได้ใช้"
+                      />
+                    </RadioGroup>
+                  </Box>
+                </>
+              )}
 
               {/* ความเห็นเพิ่มเติม */}
               <Box sx={{ mb: 2 }}>

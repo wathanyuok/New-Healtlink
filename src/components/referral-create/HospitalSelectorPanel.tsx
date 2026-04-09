@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -28,16 +28,24 @@ import {
   Stack,
   InputAdornment,
   Avatar,
+  Snackbar,
 } from "@mui/material";
 import {
   Add as AddIcon,
+  AddCircle as AddCircleIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
+  ErrorOutline as ErrorOutlineIcon,
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
   Clear as ClearIcon,
   Save as SaveIcon,
   ListAlt as ListAltIcon,
+  Close as CloseIcon,
+  KeyboardDoubleArrowRight as KeyboardDoubleArrowRightIcon,
+  NavigateBefore as PrevIcon,
+  NavigateNext as NextIcon,
+  PlaylistRemove as PlaylistRemoveIcon,
 } from "@mui/icons-material";
 import {
   useReferralCreateStore,
@@ -88,8 +96,14 @@ export default function HospitalSelectorPanel({
   const [zone, setZone] = useState<string>("");
   const [subType, setSubType] = useState<string>("");
   const [page, setPage] = useState(1);
-  const [limit] = useState(5);
+  const [limit, setLimit] = useState(5);
   const [modalOpen, setModalOpen] = useState(false);
+  const [errorToast, setErrorToast] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: "", message: "" });
+  // Staging list inside the modal (maps to Nuxt's selectReferIPDHospitals)
   const [modalSelected, setModalSelected] = useState<HospitalOption[]>([]);
 
   // Branch selections per hospital
@@ -139,20 +153,65 @@ export default function HospitalSelectorPanel({
     reloadHospitals(newPage, search, zone, subType);
   };
 
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setPage(1);
+    fetchHospitals({
+      offset: 1,
+      limit: newLimit,
+      search,
+      zone: zone || null,
+      subType: subType || null,
+    });
+  };
+
+  const handlePageJump = (newPage: number) => {
+    setPage(newPage);
+    reloadHospitals(newPage, search, zone, subType);
+  };
+
   // Modal handlers
   const openAddModal = () => {
     setModalSelected([]);
     setModalOpen(true);
   };
 
-  const toggleModalHospital = (h: HospitalOption) => {
+  // Nuxt behavior: green "+" button on a row appends to the staging list
+  const addModalHospital = (h: HospitalOption) => {
     setModalSelected((prev) => {
-      const exists = prev.some((x) => String(x.id) === String(h.id));
-      if (exists) return prev.filter((x) => String(x.id) !== String(h.id));
+      if (prev.some((x) => String(x.id) === String(h.id))) return prev;
       if (prev.length >= 5) return prev;
       return [...prev, h];
     });
   };
+
+  const removeModalHospital = (idx: number) => {
+    setModalSelected((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const isHospitalInStaging = (id: string | number) =>
+    modalSelected.some((x) => String(x.id) === String(id));
+
+  const isHospitalAlreadyConfirmed = (id: string | number) =>
+    selectedHospitals.some((x) => String(x.id) === String(id));
+
+  // Build page numbers for modal pagination (1 2 3 4 5 ... N)
+  const modalPageNumbers = useMemo(() => {
+    const tp = Math.max(1, Math.ceil(hospitalTotalCount / limit));
+    const pages: (number | "...")[] = [];
+    if (tp <= 7) {
+      for (let i = 1; i <= tp; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (page > 3) pages.push("...");
+      const start = Math.max(2, page - 1);
+      const end = Math.min(tp - 1, page + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (page < tp - 2) pages.push("...");
+      pages.push(tp);
+    }
+    return pages;
+  }, [page, limit, hospitalTotalCount]);
 
   const confirmModalSelection = async () => {
     // Add new hospitals (avoid duplicates)
@@ -174,19 +233,34 @@ export default function HospitalSelectorPanel({
 
   // Next step
   const handleNext = () => {
-    // Validate all hospitals have at least one branch
-    const hasEmpty = selectedHospitals.some((h) => {
-      const branches = selectedBranchesMap[String(h.id)];
-      return !branches || branches.length === 0;
-    });
-
-    if (hasEmpty) {
-      alert("กรุณาเลือกสาขาให้ครบทุกโรงพยาบาล");
+    if (selectedHospitals.length === 0) {
+      setErrorToast({
+        open: true,
+        title: "ข้อมูลไม่ครบถ้วน",
+        message: "กรุณาเลือกโรงพยาบาลอย่างน้อย 1 แห่ง",
+      });
       return;
     }
 
-    if (selectedHospitals.length === 0) {
-      alert("กรุณาเลือกโรงพยาบาลอย่างน้อย 1 แห่ง");
+    // Validate all hospitals have at least one branch (check both map and object)
+    const hasEmpty = selectedHospitals.some((h) => {
+      const fromMap = selectedBranchesMap[String(h.id)];
+      const fromObj = (h as SelectedHospital).selectedBranches;
+      const branches =
+        fromMap && fromMap.length > 0
+          ? fromMap
+          : fromObj && fromObj.length > 0
+            ? fromObj
+            : [];
+      return branches.length === 0;
+    });
+
+    if (hasEmpty) {
+      setErrorToast({
+        open: true,
+        title: "ข้อมูลไม่ครบถ้วน",
+        message: "กรุณาเลือกสาขาให้ครบทุกโรงพยาบาล",
+      });
       return;
     }
 
@@ -215,11 +289,15 @@ export default function HospitalSelectorPanel({
             variant="outlined"
             startIcon={<AddIcon />}
             onClick={openAddModal}
-            disabled={selectedHospitals.length >= 5}
+            disabled={selectedHospitals.length > 0}
             sx={{
               borderColor: "#00AF75",
               color: "#036245",
               "&:hover": { borderColor: "#036245", bgcolor: "#f0fdf4" },
+              "&.Mui-disabled": {
+                borderColor: "#d1d5db",
+                color: "#9ca3af",
+              },
             }}
           >
             เพิ่มสถานพยาบาลปลายทาง
@@ -280,7 +358,7 @@ export default function HospitalSelectorPanel({
                         {hospital.name?.charAt(0) || "H"}
                       </Avatar>
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center">
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {hospital.name}
                       </Typography>
@@ -291,13 +369,26 @@ export default function HospitalSelectorPanel({
                       )}
                     </TableCell>
                     <TableCell align="center">{hospital.phone || "-"}</TableCell>
-                    <TableCell>
-                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <TableCell align="center">
+                      <FormControl
+                        size="small"
+                        sx={{ minWidth: 220, mx: "auto", position: "relative" }}
+                      >
                         <Select
                           multiple
                           value={selectedBranches.map((b) => String(b.value))}
                           onChange={(e) => {
                             const vals = e.target.value as string[];
+                            // handle select-all sentinel
+                            if (vals.includes("__SELECT_ALL__")) {
+                              const allSelected =
+                                selectedBranches.length === branchOptions.length;
+                              handleBranchChange(
+                                String(hospital.id),
+                                allSelected ? [] : [...branchOptions],
+                              );
+                              return;
+                            }
                             const branches = vals
                               .map((v) => branchOptions.find((b) => String(b.value) === v))
                               .filter(Boolean) as DoctorBranchOption[];
@@ -311,10 +402,43 @@ export default function HospitalSelectorPanel({
                               .filter(Boolean)
                               .join(", ");
                           }}
-                          sx={{ fontSize: "0.875rem" }}
+                          sx={{
+                            fontSize: "0.875rem",
+                            "& .MuiSelect-select": {
+                              pr:
+                                selectedBranches.length > 0
+                                  ? "64px !important"
+                                  : "32px !important",
+                            },
+                          }}
+                          MenuProps={{
+                            PaperProps: { sx: { maxHeight: 360 } },
+                          }}
                         >
                           {branchOptions.length === 0 && (
                             <MenuItem disabled>ไม่พบสาขา</MenuItem>
+                          )}
+                          {branchOptions.length > 0 && (
+                            <MenuItem
+                              value="__SELECT_ALL__"
+                              sx={{
+                                fontWeight: 600,
+                                borderBottom: "1px solid #e5e7eb",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Checkbox
+                                checked={
+                                  selectedBranches.length === branchOptions.length
+                                }
+                                indeterminate={
+                                  selectedBranches.length > 0 &&
+                                  selectedBranches.length < branchOptions.length
+                                }
+                                size="small"
+                              />
+                              เลือกทั้งหมด
+                            </MenuItem>
                           )}
                           {branchOptions.map((branch) => (
                             <MenuItem key={branch.value} value={String(branch.value)}>
@@ -327,7 +451,55 @@ export default function HospitalSelectorPanel({
                               {branch.name}
                             </MenuItem>
                           ))}
+                          {branchOptions.length > 0 && (
+                            <MenuItem
+                              disabled
+                              sx={{
+                                opacity: "1 !important",
+                                bgcolor: "#e5e7eb",
+                                borderTop: "1px solid #d1d5db",
+                                justifyContent: "center",
+                                fontSize: "0.8125rem",
+                                color: "#374151 !important",
+                                mt: 0.5,
+                                "&.Mui-disabled": {
+                                  opacity: "1 !important",
+                                  color: "#374151",
+                                },
+                              }}
+                            >
+                              • เลือกแล้ว {selectedBranches.length} รายการ
+                            </MenuItem>
+                          )}
                         </Select>
+                        {selectedBranches.length > 0 && (
+                          <IconButton
+                            size="small"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBranchChange(String(hospital.id), []);
+                            }}
+                            sx={{
+                              position: "absolute",
+                              right: 32,
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              p: 0,
+                              width: 18,
+                              height: 18,
+                              bgcolor: "#9ca3af",
+                              color: "#fff",
+                              "&:hover": { bgcolor: "#6b7280" },
+                              zIndex: 1,
+                            }}
+                          >
+                            <CloseIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        )}
                       </FormControl>
                     </TableCell>
                     <TableCell align="center">
@@ -383,106 +555,340 @@ export default function HospitalSelectorPanel({
         </Box>
       </Box>
 
-      {/* ---- Add Hospital Modal ---- */}
-      <Dialog open={modalOpen} onClose={() => setModalOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>เพิ่มสถานพยาบาลปลายทาง</DialogTitle>
-        <DialogContent>
-          {/* Filters */}
-          <Stack direction="row" spacing={2} sx={{ mb: 2, mt: 1 }}>
-            <TextField
-              size="small"
-              placeholder="ค้นหาสถานพยาบาล..."
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ flex: 1 }}
-            />
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>โซน</InputLabel>
-              <Select value={zone} label="โซน" onChange={(e) => handleZoneChange(e.target.value)}>
-                <MenuItem value="">ทั้งหมด</MenuItem>
-                {hospitalZones.map((z) => (
-                  <MenuItem key={z.value} value={z.value}>
-                    {z.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>ประเภท</InputLabel>
-              <Select
-                value={subType}
-                label="ประเภท"
-                onChange={(e) => handleTypeChange(e.target.value)}
-              >
-                <MenuItem value="">ทั้งหมด</MenuItem>
-                {hospitalTypes.map((t) => (
-                  <MenuItem key={t.id} value={String(t.id)}>
-                    {t.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
+      {/* ---- Add Hospital Modal (Nuxt parity) ---- */}
+      <Dialog
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: "12px", overflow: "hidden" },
+        }}
+      >
+        {/* Green header bar */}
+        <Box
+          sx={{
+            bgcolor: "#00AF75",
+            color: "#fff",
+            px: 3,
+            py: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Typography
+            sx={{
+              fontFamily: "Sarabun, sans-serif",
+              fontWeight: 700,
+              fontSize: "1.1rem",
+            }}
+          >
+            เพิ่มสถานพยาบาลปลายทาง
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() => setModalOpen(false)}
+            sx={{ color: "#fff" }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
 
-          {/* Hospital list */}
-          <Box sx={{ display: "flex", gap: 2 }}>
-            {/* Left: Available hospitals */}
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                รายการสถานพยาบาล
+        <DialogContent sx={{ p: 3 }}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 48px 1fr" },
+              gap: 2,
+              alignItems: "start",
+            }}
+          >
+            {/* -------- LEFT: Available hospitals -------- */}
+            <Box>
+              <Typography
+                sx={{
+                  fontFamily: "Sarabun, sans-serif",
+                  fontWeight: 700,
+                  color: "#036245",
+                  fontSize: "1rem",
+                  mb: 2,
+                }}
+              >
+                รายการสถานพยาบาลปลายทางทั้งหมด
               </Typography>
-              <TableContainer component={Paper} sx={{ maxHeight: 400, boxShadow: "none", border: "1px solid #e5e7eb" }}>
-                <Table size="small" stickyHeader>
+
+              {/* Search box */}
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ mb: 0.5, color: "#374151", fontWeight: 500 }}
+                >
+                  ค้นหาสถานพยาบาล
+                </Typography>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="ค้นหาสถานพยาบาล"
+                  value={search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" sx={{ color: "#9ca3af" }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Box>
+
+              {/* Zone + Type row */}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 2,
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ mb: 0.5, color: "#374151", fontWeight: 500 }}
+                  >
+                    โซน <span style={{ color: "#ef4444" }}>*</span>
+                  </Typography>
+                  <FormControl
+                    size="small"
+                    fullWidth
+                    sx={{ position: "relative" }}
+                  >
+                    <Select
+                      value={zone}
+                      displayEmpty
+                      onChange={(e) => handleZoneChange(e.target.value)}
+                      MenuProps={{
+                        PaperProps: { sx: { maxHeight: 320 } },
+                      }}
+                      sx={{
+                        "& .MuiSelect-select": {
+                          pr: zone
+                            ? "64px !important"
+                            : "32px !important",
+                        },
+                      }}
+                      renderValue={(v) => {
+                        if (!v)
+                          return (
+                            <span style={{ color: "#9ca3af" }}>
+                              เลือกสาขาปลายทาง
+                            </span>
+                          );
+                        return (
+                          hospitalZones.find((z) => z.value === v)?.name || v
+                        );
+                      }}
+                    >
+                      <MenuItem value="">ทั้งหมด</MenuItem>
+                      {hospitalZones.map((z) => (
+                        <MenuItem key={z.value} value={z.value}>
+                          {z.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {zone && (
+                      <IconButton
+                        size="small"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleZoneChange("");
+                        }}
+                        sx={{
+                          position: "absolute",
+                          right: 32,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          p: 0,
+                          width: 18,
+                          height: 18,
+                          bgcolor: "#9ca3af",
+                          color: "#fff",
+                          "&:hover": { bgcolor: "#6b7280" },
+                          zIndex: 1,
+                        }}
+                      >
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    )}
+                  </FormControl>
+                </Box>
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ mb: 0.5, color: "#374151", fontWeight: 500 }}
+                  >
+                    ประเภท <span style={{ color: "#ef4444" }}>*</span>
+                  </Typography>
+                  <FormControl
+                    size="small"
+                    fullWidth
+                    sx={{ position: "relative" }}
+                  >
+                    <Select
+                      value={subType}
+                      displayEmpty
+                      onChange={(e) => handleTypeChange(e.target.value)}
+                      MenuProps={{
+                        PaperProps: { sx: { maxHeight: 320 } },
+                      }}
+                      sx={{
+                        "& .MuiSelect-select": {
+                          pr: subType
+                            ? "64px !important"
+                            : "32px !important",
+                        },
+                      }}
+                      renderValue={(v) => {
+                        if (!v)
+                          return (
+                            <span style={{ color: "#9ca3af" }}>
+                              เลือกประเภทสถานพยาบาล
+                            </span>
+                          );
+                        return (
+                          hospitalTypes.find((t) => String(t.id) === v)?.name ||
+                          v
+                        );
+                      }}
+                    >
+                      <MenuItem value="">ทั้งหมด</MenuItem>
+                      {hospitalTypes.map((t) => (
+                        <MenuItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {subType && (
+                      <IconButton
+                        size="small"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTypeChange("");
+                        }}
+                        sx={{
+                          position: "absolute",
+                          right: 32,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          p: 0,
+                          width: 18,
+                          height: 18,
+                          bgcolor: "#9ca3af",
+                          color: "#fff",
+                          "&:hover": { bgcolor: "#6b7280" },
+                          zIndex: 1,
+                        }}
+                      >
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    )}
+                  </FormControl>
+                </Box>
+              </Box>
+
+              {/* Available hospitals table */}
+              <TableContainer
+                component={Paper}
+                sx={{
+                  boxShadow: "none",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                }}
+              >
+                <Table>
                   <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ width: 40 }} />
-                      <TableCell sx={{ fontWeight: 600 }}>สถานพยาบาล</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>โซน</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>ประเภท</TableCell>
+                    <TableRow sx={{ bgcolor: "#036245" }}>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        ชื่อสถานพยาบาล
+                      </TableCell>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          width: 100,
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        เลือก
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {hospitals.map((h) => {
-                      const isSelected =
-                        modalSelected.some((s) => String(s.id) === String(h.id)) ||
-                        selectedHospitals.some((s) => String(s.id) === String(h.id));
-                      const isAlreadyAdded = selectedHospitals.some(
-                        (s) => String(s.id) === String(h.id)
-                      );
+                      // Nuxt parity: disable ONLY when in staging list or limit reached.
+                      // Do NOT check "already confirmed" — Nuxt allows re-picking; dedup on confirm.
+                      const staged = isHospitalInStaging(h.id);
+                      const limitReached = modalSelected.length >= 5;
+                      const disabled = staged || limitReached;
 
                       return (
                         <TableRow
                           key={h.id}
-                          hover
-                          onClick={() => !isAlreadyAdded && toggleModalHospital(h)}
                           sx={{
-                            cursor: isAlreadyAdded ? "default" : "pointer",
-                            opacity: isAlreadyAdded ? 0.5 : 1,
+                            "&:hover": { bgcolor: "#f9fafb" },
+                            borderBottom: "1px solid #f3f4f6",
                           }}
                         >
-                          <TableCell>
-                            <Checkbox
-                              size="small"
-                              checked={isSelected}
-                              disabled={isAlreadyAdded}
-                            />
+                          <TableCell
+                            sx={{ fontFamily: "Sarabun, sans-serif" }}
+                          >
+                            {h.name}
                           </TableCell>
-                          <TableCell>{h.name}</TableCell>
-                          <TableCell>{h.zone?.name || "-"}</TableCell>
-                          <TableCell>{h.subType?.name || "-"}</TableCell>
+                          <TableCell align="center">
+                            <IconButton
+                              size="small"
+                              disabled={disabled}
+                              onClick={() => addModalHospital(h)}
+                              sx={{
+                                // Nuxt uses bg-green-200 (#bbf7d0) as default — pale green
+                                bgcolor: disabled ? "#9ca3af" : "#bbf7d0",
+                                color: "#fff",
+                                width: 32,
+                                height: 32,
+                                "&:hover": {
+                                  bgcolor: disabled ? "#9ca3af" : "#86efac",
+                                },
+                                "&.Mui-disabled": {
+                                  bgcolor: "#9ca3af",
+                                  color: "#fff",
+                                },
+                              }}
+                            >
+                              <AddIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {hospitals.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} align="center">
+                        <TableCell colSpan={2} align="center" sx={{ py: 4 }}>
                           <Typography variant="body2" color="textSecondary">
                             ไม่พบข้อมูลสถานพยาบาล
                           </Typography>
@@ -492,68 +898,362 @@ export default function HospitalSelectorPanel({
                   </TableBody>
                 </Table>
               </TableContainer>
-              {totalPages > 1 && (
-                <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-                  <Pagination
-                    count={totalPages}
-                    page={page}
-                    onChange={handlePageChange}
-                    size="small"
-                    color="primary"
-                  />
+
+              {/* Pagination */}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  mt: 2,
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" sx={{ color: "#6b7280" }}>
+                    แถวต่อหน้า
+                  </Typography>
+                  <FormControl size="small" sx={{ minWidth: 70 }}>
+                    <Select
+                      value={limit}
+                      onChange={(e) =>
+                        handleLimitChange(Number(e.target.value))
+                      }
+                      sx={{ fontSize: "0.875rem", height: 32 }}
+                    >
+                      <MenuItem value={5}>5</MenuItem>
+                      <MenuItem value={10}>10</MenuItem>
+                      <MenuItem value={20}>20</MenuItem>
+                      <MenuItem value={50}>50</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="body2" sx={{ color: "#6b7280" }}>
+                    ทั้งหมด {hospitalTotalCount} รายการ
+                  </Typography>
                 </Box>
-              )}
+
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                >
+                  <Button
+                    size="small"
+                    disabled={page <= 1}
+                    onClick={() => handlePageJump(page - 1)}
+                    sx={{ minWidth: 32, p: 0.5, color: "#6b7280" }}
+                  >
+                    <PrevIcon fontSize="small" />
+                  </Button>
+                  {modalPageNumbers.map((p: number | "...", idx: number) =>
+                    p === "..." ? (
+                      <Typography
+                        key={`ms-dots-${idx}`}
+                        variant="body2"
+                        sx={{ px: 0.5, color: "#6b7280" }}
+                      >
+                        ...
+                      </Typography>
+                    ) : (
+                      <Button
+                        key={`ms-${p}`}
+                        size="small"
+                        onClick={() => handlePageJump(p as number)}
+                        sx={{
+                          minWidth: 32,
+                          height: 32,
+                          p: 0,
+                          borderRadius: "6px",
+                          fontWeight: page === p ? 700 : 400,
+                          bgcolor: page === p ? "#00AF75" : "transparent",
+                          color: page === p ? "#fff" : "#374151",
+                          "&:hover": {
+                            bgcolor: page === p ? "#036245" : "#f3f4f6",
+                          },
+                        }}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  )}
+                  <Button
+                    size="small"
+                    disabled={page >= totalPages}
+                    onClick={() => handlePageJump(page + 1)}
+                    sx={{ minWidth: 32, p: 0.5, color: "#6b7280" }}
+                  >
+                    <NextIcon fontSize="small" />
+                  </Button>
+                </Box>
+              </Box>
             </Box>
 
-            {/* Right: Selected in modal */}
-            <Box sx={{ width: 280 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                ที่เลือก ({modalSelected.length}/5)
+            {/* -------- CENTER arrow -------- */}
+            <Box
+              sx={{
+                display: { xs: "none", md: "flex" },
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                pt: 10,
+              }}
+            >
+              <KeyboardDoubleArrowRightIcon
+                sx={{ fontSize: 40, color: "#111827" }}
+              />
+            </Box>
+
+            {/* -------- RIGHT: Selected staging list -------- */}
+            <Box>
+              <Typography
+                sx={{
+                  fontFamily: "Sarabun, sans-serif",
+                  fontWeight: 700,
+                  color: "#036245",
+                  fontSize: "1rem",
+                  mb: 2,
+                }}
+              >
+                รายการที่เลือกทั้งหมด ( {modalSelected.length} / 5 )
               </Typography>
-              <Paper sx={{ p: 1, minHeight: 200, border: "1px solid #e5e7eb", boxShadow: "none" }}>
-                {modalSelected.length === 0 ? (
-                  <Typography variant="body2" color="textSecondary" sx={{ p: 2, textAlign: "center" }}>
-                    ยังไม่ได้เลือกสถานพยาบาล
-                  </Typography>
-                ) : (
-                  <Stack spacing={0.5}>
-                    {modalSelected.map((h) => (
-                      <Chip
-                        key={h.id}
-                        label={h.name}
-                        onDelete={() => toggleModalHospital(h)}
-                        size="small"
-                        sx={{ justifyContent: "space-between" }}
-                      />
-                    ))}
-                  </Stack>
-                )}
-              </Paper>
+              <TableContainer
+                component={Paper}
+                sx={{
+                  boxShadow: "none",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                }}
+              >
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "#036245" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          width: 60,
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        ลบ
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        ชื่อสถานพยาบาล
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        โซน
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          color: "#fff",
+                          fontFamily: "Sarabun, sans-serif",
+                        }}
+                      >
+                        ประเภท
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {modalSelected.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          align="center"
+                          sx={{
+                            py: 6,
+                            color: "#9ca3af",
+                            fontFamily: "Sarabun, sans-serif",
+                            fontSize: "0.9rem",
+                            border: "none",
+                          }}
+                        >
+                          ยังไม่ได้เลือกสถานพยาบาล
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      modalSelected.map((h, idx) => (
+                        <TableRow
+                          key={h.id}
+                          sx={{ borderBottom: "1px solid #f3f4f6" }}
+                        >
+                          <TableCell align="center">
+                            <IconButton
+                              size="small"
+                              onClick={() => removeModalHospital(idx)}
+                              sx={{
+                                bgcolor: "#ef4444",
+                                color: "#fff",
+                                width: 32,
+                                height: 32,
+                                "&:hover": { bgcolor: "#dc2626" },
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                          <TableCell
+                            sx={{ fontFamily: "Sarabun, sans-serif" }}
+                          >
+                            {h.name}
+                          </TableCell>
+                          <TableCell
+                            sx={{ fontFamily: "Sarabun, sans-serif" }}
+                          >
+                            {h.zone?.name || "-"}
+                          </TableCell>
+                          <TableCell
+                            sx={{ fontFamily: "Sarabun, sans-serif" }}
+                          >
+                            {h.subType?.name || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setModalOpen(false)} sx={{ color: "#6b7280" }}>
-            ยกเลิก
-          </Button>
+
+        {/* Footer: ยกเลิก | (ล้างรายการ + บันทึก) */}
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 3,
+            pt: 1,
+            justifyContent: "space-between",
+            borderTop: "1px solid #f3f4f6",
+          }}
+        >
           <Button
             variant="outlined"
-            startIcon={<ClearIcon />}
-            onClick={() => setModalSelected([])}
-            sx={{ color: "#ef4444", borderColor: "#ef4444" }}
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setModalOpen(false)}
+            sx={{
+              textTransform: "none",
+              fontFamily: "Sarabun, sans-serif",
+              borderColor: "#d1d5db",
+              color: "#374151",
+              "&:hover": { borderColor: "#9ca3af", bgcolor: "#f9fafb" },
+            }}
           >
-            ล้างรายการ
+            ยกเลิก
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={confirmModalSelection}
-            sx={{ bgcolor: "#00AF75", "&:hover": { bgcolor: "#036245" } }}
-          >
-            บันทึก
-          </Button>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<PlaylistRemoveIcon />}
+              onClick={() => setModalSelected([])}
+              sx={{
+                textTransform: "none",
+                fontFamily: "Sarabun, sans-serif",
+                borderColor: "#ef4444",
+                color: "#ef4444",
+                "&:hover": {
+                  borderColor: "#dc2626",
+                  bgcolor: "#fef2f2",
+                },
+              }}
+            >
+              ล้างรายการสถานพยาบาล
+            </Button>
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<SaveIcon />}
+              onClick={confirmModalSelection}
+              sx={{
+                textTransform: "none",
+                fontFamily: "Sarabun, sans-serif",
+                bgcolor: "#00AF75",
+                color: "#fff",
+                boxShadow: "none",
+                "&:hover": { bgcolor: "#036245", boxShadow: "none" },
+              }}
+            >
+              บันทึก
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
+
+      {/* Error Toast */}
+      <Snackbar
+        open={errorToast.open}
+        autoHideDuration={4000}
+        onClose={() => setErrorToast((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        sx={{ mt: 2, zIndex: (t) => t.zIndex.modal + 100 }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 1.5,
+            bgcolor: "#fee2e2",
+            border: "1px solid #fecaca",
+            borderRadius: "10px",
+            px: 2.5,
+            py: 2,
+            minWidth: 320,
+            maxWidth: 420,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            fontFamily: "Sarabun, sans-serif",
+          }}
+        >
+          <ErrorOutlineIcon
+            sx={{ color: "#dc2626", fontSize: 26, mt: 0.25, flexShrink: 0 }}
+          />
+          <Box sx={{ flex: 1 }}>
+            <Typography
+              sx={{
+                color: "#dc2626",
+                fontWeight: 700,
+                fontSize: "1rem",
+                fontFamily: "Sarabun, sans-serif",
+                lineHeight: 1.3,
+              }}
+            >
+              {errorToast.title}
+            </Typography>
+            <Typography
+              sx={{
+                color: "#374151",
+                fontSize: "0.875rem",
+                mt: 0.5,
+                fontFamily: "Sarabun, sans-serif",
+                lineHeight: 1.5,
+              }}
+            >
+              {errorToast.message}
+            </Typography>
+          </Box>
+          <IconButton
+            size="small"
+            onClick={() =>
+              setErrorToast((s) => ({ ...s, open: false }))
+            }
+            sx={{ color: "#9ca3af", p: 0.5, mt: -0.5, mr: -0.5 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Snackbar>
     </Box>
   );
 }

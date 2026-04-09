@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import BreadcrumbsRefer from "@/components/referral-create/BreadcrumbsRefer";
 import HospitalSelectorPanel from "@/components/referral-create/HospitalSelectorPanel";
 import ViewSelectedHospitalsModal from "@/components/referral-create/ViewSelectedHospitalsModal";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
 import { useReferralCreateStore, type SelectedHospital } from "@/stores/referralCreateStore";
 
 /* ------------------------------------------------------------------ */
@@ -174,6 +175,7 @@ function IPDReferralInner() {
 
   return (
     <Box sx={{ width: "100%" }}>
+      <LoadingOverlay open={isLoading} />
       {/* Header */}
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
