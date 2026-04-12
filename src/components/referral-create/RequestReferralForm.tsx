@@ -176,44 +176,44 @@ export interface ReferralFormData {
 }
 
 const defaultFormData: ReferralFormData = {
-  patient_pid: "1234567890123",
-  patient_prefix: "นาย",
-  patient_firstname: "ทดสอบ",
-  patient_lastname: "ระบบ",
-  patient_birthday: "1990-05-15",
-  patient_age: "36",
-  patient_sex: "ชาย",
-  patient_blood_group: "O",
-  patient_hn: "HN001234",
+  patient_pid: "",
+  patient_prefix: "",
+  patient_firstname: "",
+  patient_lastname: "",
+  patient_birthday: "",
+  patient_age: "",
+  patient_sex: "",
+  patient_blood_group: "",
+  patient_hn: "",
   patient_an: "",
   patient_vn: "",
   patient_image: null,
-  patient_treatment: "บัตรทอง",
+  patient_treatment: "",
   patient_treatment_other: "",
   patient_treatment_hospital: "",
-  patient_house: "99/1",
-  patient_moo: "5",
-  patient_road: "สุขุมวิท",
-  patient_alley: "ซอย 10",
-  patient_tambon: "บางจาก",
-  patient_amphur: "พระโขนง",
-  patient_changwat: "กรุงเทพมหานคร",
-  patient_zipcode: "10260",
-  patient_phone: "0812345678",
-  emergency_contacts: [{ name: "สมศรี ระบบ", phone: "0898765432", relation: "คู่สมรส" }],
+  patient_house: "",
+  patient_moo: "",
+  patient_road: "",
+  patient_alley: "",
+  patient_tambon: "",
+  patient_amphur: "",
+  patient_changwat: "",
+  patient_zipcode: "",
+  patient_phone: "",
+  emergency_contacts: [],
   prescribingDoctor: "",
-  doctorCode: "D12345",
-  medicalDepartment: "อายุรกรรม",
-  doctorContactNumber: "0891112222",
+  doctorCode: "",
+  medicalDepartment: "",
+  doctorContactNumber: "",
   startDate: "",
   startTime: "",
   referralCreationPoint: "",
   referral_cause: "",
-  referral_reason: "ส่งต่อเพื่อรับการรักษา",
-  acute_level: "5",
+  referral_reason: "",
+  acute_level: "",
   icu_level: "",
   additional_info: "",
-  is_infectious: "false",
+  is_infectious: "",
   infectious_detail: "",
   car_refer: "",
   use_nurse: "",
@@ -222,21 +222,21 @@ const defaultFormData: ReferralFormData = {
   physicalExam: "",
   diseases: [],
   drugAllergy: [],
-  vaccines: [{ id: 1, vaccineName: "", date: "", location: "" }],
-  temperature: "36.5",
-  bps: "120",
-  bpd: "80",
-  pulse: "72",
-  rr: "18",
-  visit_primary_symptom_main_symptom: "ปวดท้อง",
-  visit_primary_symptom_current_illness: "ปวดท้องบริเวณลิ้นปี่ 2 วัน มีอาเจียน",
-  pe: "Abdomen: mild tenderness at epigastric area",
-  Imp: "R/O Gastritis",
+  vaccines: [],
+  temperature: "",
+  bps: "",
+  bpd: "",
+  pulse: "",
+  rr: "",
+  visit_primary_symptom_main_symptom: "",
+  visit_primary_symptom_current_illness: "",
+  pe: "",
+  Imp: "",
   moreDetail: "",
-  icd10Basic: "โรคกระเพาะอาหารอักเสบ",
-  icd10: [{ id: 1, icd_10_tm: "K29", diagetname: "กระเพาะอาหารอักเสบ", diagename: "GASTRITIS" }],
+  icd10Basic: "",
+  icd10: [],
   icd10MoreBasic: "",
-  icd10More: [{ id: 2, icd_10_tm: "", diagetname: "", diagename: "" }],
+  icd10More: [],
   medicines: [],
   documents: [],
 };
@@ -272,14 +272,54 @@ const ACUTE_LEVEL_OPTIONS = [
 ];
 
 const ICU_LEVEL_OPTIONS = [
-  { value: "1", label: "ICU Level 1" },
-  { value: "2", label: "ICU Level 2" },
-  { value: "3", label: "ICU Level 3" },
+  {
+    value: "1",
+    label: "ผู้ป่วยวิกฤต (Priority 1)",
+    badge: { text: "ICU", color: "#dc2626" }, // red
+  },
+  {
+    value: "2",
+    label: "ผู้ป่วยที่ต้องเฝ้าระวังอย่างใกล้ชิด (Priority 2)",
+    badge: { text: "ICU", color: "#f97316" }, // orange
+  },
+  {
+    value: "3",
+    label: "ผู้ป่วยโรครุนแรงที่มีโอกาสฟื้นตัวต่ำ (Priority 3)",
+    badge: { text: "ICU", color: "#eab308" }, // yellow
+  },
+  {
+    value: "4",
+    label: "ผู้ป่วยที่ไม่จำเป็นต้องอยู่ใน ICU (Priority 4)",
+    badge: { text: "ICU", color: "#22c55e" }, // green
+  },
 ];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+/** Clearable endAdornment for MUI Select — shows X when value is set */
+const clearableSelectProps = (
+  value: string,
+  onClear: () => void
+) =>
+  value
+    ? {
+        endAdornment: (
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+            sx={{ mr: 2, p: 0.25, color: "#9ca3af" }}
+          >
+            <CloseIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        ),
+      }
+    : {};
+
 const SectionHeader = ({ title }: { title: string }) => (
   <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1.5, mb: 0, borderBottom: "2px solid #16a34a" }}>
     <Typography sx={{ fontWeight: 600, color: "#036245", fontSize: "1.05rem" }}>
@@ -348,6 +388,7 @@ interface Props {
   formData: Record<string, any>;
   onUpdate: (partial: Record<string, any>) => void;
   formErrors?: Record<string, string>;
+  draftLoaded?: number; // counter that increments when draft data is loaded
 }
 
 export default function RequestReferralForm({
@@ -358,6 +399,7 @@ export default function RequestReferralForm({
   formData: externalFormData,
   onUpdate,
   formErrors = {},
+  draftLoaded = 0,
 }: Props) {
   // Local form state merged with external (only non-empty external values override defaults)
   const [form, setForm] = useState<ReferralFormData>(() => {
@@ -461,6 +503,39 @@ export default function RequestReferralForm({
     setShowDocModal(false);
   };
 
+  // Sync initial form values back to the store on mount
+  // so that handleSave in the parent can read the correct values
+  const initialSynced = useRef(false);
+  useEffect(() => {
+    if (!initialSynced.current) {
+      initialSynced.current = true;
+      onUpdate(form);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When draft data is loaded (signalled by draftLoaded counter), update local form state
+  useEffect(() => {
+    if (draftLoaded === 0) return; // skip initial render
+    if (!externalFormData) return;
+    console.log("[Form] draftLoaded triggered, externalFormData:", externalFormData);
+    // Check if external data has meaningful content (not just empty defaults)
+    const hasData = Object.values(externalFormData).some((v) =>
+      v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
+    );
+    console.log("[Form] hasData:", hasData);
+    if (!hasData) return;
+    setForm((prev) => {
+      const merged = { ...prev };
+      Object.entries(externalFormData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
+          (merged as any)[key] = value;
+        }
+      });
+      console.log("[Form] Merged form state — patient_pid:", merged.patient_pid, "patient_firstname:", merged.patient_firstname);
+      return merged;
+    });
+  }, [draftLoaded, externalFormData]);
+
   const updateField = useCallback(
     (field: keyof ReferralFormData, value: any) => {
       setForm((prev) => ({ ...prev, [field]: value }));
@@ -532,7 +607,9 @@ export default function RequestReferralForm({
     fetchReferralCauses({
       hospital: userHospitalId,
       referralType,
-      isOpd: kind === "referER" ? "false" : "true",
+      ...(kind === "referER"
+        ? { isEr: "true", isActive: "true" }
+        : { isOpd: "true" }),
     });
 
     fetchDoctorUsers({
@@ -743,6 +820,45 @@ export default function RequestReferralForm({
     setIcd10Options([]);
   };
 
+  // Medicine autocomplete search
+  interface MedicineOption {
+    value: string;
+    label: string;
+    name_th: string;
+  }
+  const [medicineOptions, setMedicineOptions] = useState<MedicineOption[]>([]);
+  const [medicineLoading, setMedicineLoading] = useState(false);
+  const medicineSearchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const searchMedicine = useCallback((searchValue: string) => {
+    if (medicineSearchTimer.current) clearTimeout(medicineSearchTimer.current);
+    if (!searchValue || searchValue.length < 1) {
+      setMedicineOptions([]);
+      return;
+    }
+    medicineSearchTimer.current = setTimeout(async () => {
+      setMedicineLoading(true);
+      try {
+        const res = await api.get("main-service/medicine/findAndCount", {
+          params: { limit: 10, offset: 1, search: searchValue },
+        });
+        const items = res.data?.medicine || res.data?.medicines || res.data?.data || [];
+        setMedicineOptions(
+          items.map((item: any) => ({
+            value: item.tmtid || item.id || "",
+            label: `${item.tmtid || ""} - ${item.name || ""}`,
+            name_th: item.name || "",
+          }))
+        );
+      } catch (e) {
+        console.error("Medicine search error:", e);
+        setMedicineOptions([]);
+      } finally {
+        setMedicineLoading(false);
+      }
+    }, 300);
+  }, []);
+
   const addMedicine = () => {
     const newMeds = [
       ...form.medicines,
@@ -941,12 +1057,28 @@ export default function RequestReferralForm({
                         onChange={(e) =>
                           updateField("referralCreationPoint", e.target.value)
                         }
+                        renderValue={(selected) => {
+                          if (!selected) return <span style={{ color: "#9ca3af" }}>กรุณาเลือกจุดสร้างใบส่งตัว</span>;
+                          const opt = erReferPoints.find((o: any) => String(o.id) === String(selected));
+                          return opt?.name || selected;
+                        }}
+                        endAdornment={
+                          form.referralCreationPoint ? (
+                            <IconButton
+                              size="small"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                updateField("referralCreationPoint", "");
+                              }}
+                              sx={{ mr: 2, p: 0.25, color: "#9ca3af", "&:hover": { color: "#ef4444" } }}
+                            >
+                              <CloseIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          ) : null
+                        }
                       >
-                        <MenuItem value="" disabled>
-                          <span style={{ color: "#9ca3af" }}>
-                            เลือกจุดสร้างใบส่งตัว
-                          </span>
-                        </MenuItem>
                         {erReferPoints.map((opt: any) => (
                           <MenuItem key={opt.id} value={String(opt.id)}>
                             {opt.name}
@@ -1326,6 +1458,7 @@ export default function RequestReferralForm({
                         sx: { maxHeight: 240 },
                       },
                     }}
+                    {...clearableSelectProps(form.referral_cause, () => updateField("referral_cause", ""))}
                   >
                     <MenuItem value="" disabled>
                       <span style={{ color: "#9ca3af" }}>
@@ -1392,6 +1525,7 @@ export default function RequestReferralForm({
                       updateField("acute_level", e.target.value)
                     }
                     error={!!formErrors.acute_level}
+                    {...clearableSelectProps(form.acute_level, () => updateField("acute_level", ""))}
                   >
                     <MenuItem value="" disabled>
                       <span style={{ color: "#9ca3af" }}>เลือกระดับ</span>
@@ -1443,13 +1577,42 @@ export default function RequestReferralForm({
                       onChange={(e) =>
                         updateField("icu_level", e.target.value)
                       }
+                      {...clearableSelectProps(form.icu_level, () => updateField("icu_level", ""))}
+                      renderValue={(selected) => {
+                        if (!selected) return <span style={{ color: "#9ca3af" }}>เลือกระดับ</span>;
+                        const opt = ICU_LEVEL_OPTIONS.find((o) => o.value === selected);
+                        if (!opt) return selected;
+                        return (
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Box sx={{
+                              bgcolor: opt.badge.color, color: "#fff", borderRadius: "50%",
+                              width: 28, height: 28, display: "flex", alignItems: "center",
+                              justifyContent: "center", fontSize: "0.65rem", fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {opt.badge.text}
+                            </Box>
+                            <span>{opt.label}</span>
+                          </Box>
+                        );
+                      }}
                     >
                       <MenuItem value="" disabled>
                         <span style={{ color: "#9ca3af" }}>เลือกระดับ</span>
                       </MenuItem>
                       {ICU_LEVEL_OPTIONS.map((opt) => (
                         <MenuItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Box sx={{
+                              bgcolor: opt.badge.color, color: "#fff", borderRadius: "50%",
+                              width: 28, height: 28, display: "flex", alignItems: "center",
+                              justifyContent: "center", fontSize: "0.65rem", fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {opt.badge.text}
+                            </Box>
+                            <span>{opt.label}</span>
+                          </Box>
                         </MenuItem>
                       ))}
                     </Select>
@@ -1486,17 +1649,17 @@ export default function RequestReferralForm({
                   }
                 >
                   <FormControlLabel
-                    value="yes"
+                    value="true"
                     control={<Radio size="small" />}
                     label="ใช่"
                   />
                   <FormControlLabel
-                    value="no"
+                    value="false"
                     control={<Radio size="small" />}
                     label="ไม่"
                   />
                 </RadioGroup>
-                {form.is_infectious === "yes" && (
+                {kind !== "referER" && form.is_infectious === "true" && (
                   <TextField
                     fullWidth
                     size="small"
@@ -1527,12 +1690,12 @@ export default function RequestReferralForm({
                       }
                     >
                       <FormControlLabel
-                        value="need"
+                        value="true"
                         control={<Radio size="small" />}
                         label="ต้องการใช้"
                       />
                       <FormControlLabel
-                        value="notNeed"
+                        value="false"
                         control={<Radio size="small" />}
                         label="ไม่ต้องการใช้"
                       />
@@ -1553,12 +1716,12 @@ export default function RequestReferralForm({
                       }
                     >
                       <FormControlLabel
-                        value="use"
+                        value="true"
                         control={<Radio size="small" />}
                         label="ใช้"
                       />
                       <FormControlLabel
-                        value="notUse"
+                        value="false"
                         control={<Radio size="small" />}
                         label="ไม่ได้ใช้"
                       />
@@ -1607,7 +1770,7 @@ export default function RequestReferralForm({
               </Typography>
               {form.requiredEquipment.map((item, index) => (
                 <Box
-                  key={item.id}
+                  key={item.id ?? index}
                   sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
                 >
                   <TextField
@@ -1717,6 +1880,7 @@ export default function RequestReferralForm({
                         updateField("patient_prefix", e.target.value)
                       }
                       error={!!formErrors.patient_prefix}
+                      {...clearableSelectProps(form.patient_prefix, () => updateField("patient_prefix", ""))}
                     >
                       <MenuItem value="" disabled>
                         <span style={{ color: "#9ca3af" }}>คำนำหน้า...</span>
@@ -1857,6 +2021,7 @@ export default function RequestReferralForm({
                           updateField("patient_sex", e.target.value)
                         }
                         error={!!formErrors.patient_sex}
+                        {...clearableSelectProps(form.patient_sex, () => updateField("patient_sex", ""))}
                       >
                         <MenuItem value="" disabled>
                           <span style={{ color: "#9ca3af" }}>เพศ...</span>
@@ -1899,6 +2064,7 @@ export default function RequestReferralForm({
                         onChange={(e) =>
                           updateField("patient_blood_group", e.target.value)
                         }
+                        {...clearableSelectProps(form.patient_blood_group, () => updateField("patient_blood_group", ""))}
                       >
                         <MenuItem value="" disabled>
                           <span style={{ color: "#9ca3af" }}>
@@ -1975,6 +2141,7 @@ export default function RequestReferralForm({
                       displayEmpty
                       onChange={(e) => updateField("patient_treatment", e.target.value)}
                       error={!!formErrors.patient_treatment}
+                      {...clearableSelectProps(form.patient_treatment, () => updateField("patient_treatment", ""))}
                     >
                       <MenuItem value="" disabled>
                         <span style={{ color: "#9ca3af" }}>สิทธิ์การรักษา...</span>
@@ -2183,7 +2350,7 @@ export default function RequestReferralForm({
             <Typography sx={{ fontWeight: 500, mb: 1 }}>โรคประจำตัว</Typography>
             {form.diseases.map((disease, index) => (
               <Box
-                key={disease.id}
+                key={disease.id ?? index}
                 sx={{
                   display: "flex",
                   alignItems: "flex-end",
@@ -2226,7 +2393,7 @@ export default function RequestReferralForm({
             </Typography>
             {form.drugAllergy.map((allergy, index) => (
               <Box
-                key={allergy.id}
+                key={allergy.id ?? index}
                 sx={{
                   display: "flex",
                   alignItems: "center",
@@ -2266,7 +2433,7 @@ export default function RequestReferralForm({
           <Box sx={{ p: 2 }}>
             {form.vaccines.map((vaccine, index) => (
               <Box
-                key={vaccine.id}
+                key={vaccine.id ?? index}
                 sx={{
                   display: "flex",
                   alignItems: "flex-end",
@@ -2514,7 +2681,7 @@ export default function RequestReferralForm({
 
               {form.icd10.map((item, index) => (
                 <Box
-                  key={item.id}
+                  key={item.id ?? `icd10-${index}`}
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr 1fr auto",
@@ -2525,14 +2692,42 @@ export default function RequestReferralForm({
                 >
                   <Box>
                     <FieldLabel label="รหัสโรค (ICD-10)" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="รหัสโรค (ICD-10)"
-                      value={item.icd_10_tm}
-                      onChange={(e) =>
-                        updateICD10Field(index, "icd_10_tm", e.target.value)
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.icd_10_tm}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10Field(index, "icd_10_tm", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.value
                       }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="รหัสโรค (ICD-10)"
+                        />
+                      )}
                     />
                   </Box>
                   <Box>
@@ -2552,7 +2747,7 @@ export default function RequestReferralForm({
                         }
                       }}
                       getOptionLabel={(option) =>
-                        typeof option === "string" ? option : option.label
+                        typeof option === "string" ? option : option.name_th
                       }
                       renderOption={(props, option) => (
                         <li {...props} key={option.value}>
@@ -2577,14 +2772,42 @@ export default function RequestReferralForm({
                   </Box>
                   <Box>
                     <FieldLabel label="ชื่อโรคภาษาอังกฤษ" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="ชื่อโรคภาษาอังกฤษ"
-                      value={item.diagename}
-                      onChange={(e) =>
-                        updateICD10Field(index, "diagename", e.target.value)
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.diagename}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10Field(index, "diagename", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.name_en
                       }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="ชื่อโรคภาษาอังกฤษ"
+                        />
+                      )}
                     />
                   </Box>
                   <Box
@@ -2631,7 +2854,7 @@ export default function RequestReferralForm({
 
               {form.icd10More.map((item, index) => (
                 <Box
-                  key={item.id}
+                  key={item.id ?? `icd10m-${index}`}
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr 1fr auto",
@@ -2642,14 +2865,42 @@ export default function RequestReferralForm({
                 >
                   <Box>
                     <FieldLabel label="รหัสโรค (ICD-10)" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="รหัสโรค (ICD-10)"
-                      value={item.icd_10_tm}
-                      onChange={(e) =>
-                        updateICD10MoreField(index, "icd_10_tm", e.target.value)
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.icd_10_tm}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10MoreField(index, "icd_10_tm", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10More");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.value
                       }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="รหัสโรค (ICD-10)"
+                        />
+                      )}
                     />
                   </Box>
                   <Box>
@@ -2669,7 +2920,7 @@ export default function RequestReferralForm({
                         }
                       }}
                       getOptionLabel={(option) =>
-                        typeof option === "string" ? option : option.label
+                        typeof option === "string" ? option : option.name_th
                       }
                       renderOption={(props, option) => (
                         <li {...props} key={option.value}>
@@ -2694,14 +2945,42 @@ export default function RequestReferralForm({
                   </Box>
                   <Box>
                     <FieldLabel label="ชื่อโรคภาษาอังกฤษ" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="ชื่อโรคภาษาอังกฤษ"
-                      value={item.diagename}
-                      onChange={(e) =>
-                        updateICD10MoreField(index, "diagename", e.target.value)
+                    <Autocomplete
+                      freeSolo
+                      options={icd10Options}
+                      loading={icd10Loading}
+                      inputValue={item.diagename}
+                      onInputChange={(_e, value, reason) => {
+                        updateICD10MoreField(index, "diagename", value);
+                        if (reason === "input") searchICD10(value);
+                      }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          handleICD10Select(value as ICD10Option, index, "icd10More");
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.name_en
                       }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.value} - {option.name_en}
+                            </Typography>
+                            <Typography sx={{ fontSize: "0.8rem", color: "#666" }}>
+                              {option.name_th}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="ชื่อโรคภาษาอังกฤษ"
+                        />
+                      )}
                     />
                   </Box>
                   <Box
@@ -2734,7 +3013,7 @@ export default function RequestReferralForm({
             <Box sx={{ p: 2 }}>
               {form.medicines.map((med, index) => (
                 <Box
-                  key={med.id}
+                  key={med.id ?? `med-${index}`}
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "auto 2fr 1fr 1fr 1fr auto",
@@ -2757,16 +3036,45 @@ export default function RequestReferralForm({
                   </Box>
                   <Box>
                     <FieldLabel label="ชื่อยา" />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="ชื่อยา"
-                      value={med.drugname}
-                      onChange={(e) => {
+                    <Autocomplete
+                      freeSolo
+                      options={medicineOptions}
+                      loading={medicineLoading}
+                      inputValue={med.drugname}
+                      onInputChange={(_e, value, reason) => {
                         const newMeds = [...form.medicines];
-                        newMeds[index] = { ...newMeds[index], drugname: e.target.value };
+                        newMeds[index] = { ...newMeds[index], drugname: value };
                         updateField("medicines", newMeds);
+                        if (reason === "input") searchMedicine(value);
                       }}
+                      onChange={(_e, value) => {
+                        if (value && typeof value !== "string") {
+                          const opt = value as MedicineOption;
+                          const newMeds = [...form.medicines];
+                          newMeds[index] = { ...newMeds[index], drugname: opt.name_th };
+                          updateField("medicines", newMeds);
+                          setMedicineOptions([]);
+                        }
+                      }}
+                      getOptionLabel={(option) =>
+                        typeof option === "string" ? option : option.name_th
+                      }
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.value}>
+                          <Box>
+                            <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                              {option.label}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="ชื่อยา"
+                        />
+                      )}
                     />
                   </Box>
                   <Box>

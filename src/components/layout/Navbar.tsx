@@ -12,7 +12,9 @@ import {
   Logout as LogoutIcon,
   Person as PersonIcon,
   Search as SearchIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
+import IconButton from "@mui/material/IconButton";
 import { useAuthStore } from "@/stores/authStore";
 import { NAVBAR_HEIGHT } from "./Sidebar";
 import api from "@/lib/api";
@@ -135,6 +137,23 @@ export default function Navbar() {
                 const h = hospitals.find((h: any) => String(h.id) === v);
                 return <Typography fontSize={14} noWrap>{h?.name || v}</Typography>;
               }}
+              endAdornment={
+                selectedHospital ? (
+                  <IconButton
+                    size="small"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setSelectedHospital("");
+                      setOptionHospital(null);
+                    }}
+                    sx={{ mr: 2, p: 0.25, color: "#9ca3af", "&:hover": { color: "#ef4444" } }}
+                  >
+                    <CloseIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                ) : null
+              }
               MenuProps={{ PaperProps: { sx: { maxHeight: 400 } }, autoFocus: false }}
               sx={{
                 bgcolor: "#F8FFFE",

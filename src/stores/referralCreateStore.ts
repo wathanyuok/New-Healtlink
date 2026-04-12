@@ -130,7 +130,7 @@ interface ReferralCreateState {
   fetchDoctorBranches: (hospitalIds: (string | number)[], isEr?: boolean) => Promise<void>;
   fetchDeliveryPoints: (params: any) => Promise<any>;
   fetchDoctorBranchList: (params: any) => Promise<any>;
-  fetchReferralCauses: (params: { hospital?: string | number; referralType?: string; isOpd?: string }) => Promise<any>;
+  fetchReferralCauses: (params: { hospital?: string | number; referralType?: string; isOpd?: string; isEr?: string; isActive?: string }) => Promise<any>;
   fetchDoctorUsers: (params: { hospital?: string | number; search?: string; limit?: number; offset?: number }) => Promise<any>;
   createReferralDocument: (data: any) => Promise<any>;
   updateReferralDocument: (id: number, data: any) => Promise<any>;
@@ -150,43 +150,85 @@ interface ReferralCreateState {
 /* ------------------------------------------------------------------ */
 
 const defaultFormData: FormDataType = {
-  patient_pid: "1234567890123",
-  patient_prefix: "นาย",
-  patient_firstname: "ทดสอบ",
-  patient_lastname: "ระบบ",
-  patient_birthday: "1990-05-15",
-  patient_age: "36",
-  patient_sex: "ชาย",
-  patient_blood_group: "O",
-  patient_hn: "HN001234",
-  patient_treatment: "บัตรทอง",
-  patient_phone: "0812345678",
+  // Patient info (will be filled from API/search)
+  patient_pid: "",
+  patient_prefix: "",
+  patient_firstname: "",
+  patient_lastname: "",
+  patient_birthday: "",
+  patient_age: "",
+  patient_sex: "",
+  patient_blood_group: "",
+  patient_hn: "",
+  patient_treatment: "",
+  patient_treatment_hospital: "",
+  patient_phone: "",
+  // Patient address
+  patient_house: "",
+  patient_moo: "",
+  patient_tambon: "",
+  patient_amphur: "",
+  patient_alley: "",
+  patient_road: "",
+  patient_changwat: "",
+  patient_zip_code: "",
+  patient_mobile_phone: "",
+  // Emergency contact
+  patient_contact_full_name: "",
+  patient_contact_mobile_phone: "",
+  patient_contact_relation: "",
+  patient_personal_disease: "",
+  // Referral info
   certificationPeriod: "",
   startDate: "",
   startTime: "",
   referralCreationPoint: "",
   prescribingDoctor: "",
-  doctorCode: "D12345",
-  medicalDepartment: "อายุรกรรม",
-  doctorContactNumber: "0891112222",
+  docterName: "",
+  doctorCode: "",
+  medicalDepartment: "",
+  doctorContactNumber: "",
+  // Referral cause/status (these should be IDs from dropdown, not text!)
   referral_cause: "",
-  referral_reason: "ส่งต่อเพื่อรับการรักษา",
-  acute_level: "5",
-  referralCause: "ต้องการการรักษาเฉพาะทาง",
-  levelOfUrgency: "5",
+  referral_reason: "",
+  acute_level: "",
+  referralCause: "",
+  levelOfUrgency: "",
   icuLevel: "",
-  visit_primary_symptom_main_symptom: "ปวดท้อง",
-  visit_primary_symptom_current_illness: "ปวดท้องบริเวณลิ้นปี่ 2 วัน มีอาเจียน",
-  pe: "Abdomen: mild tenderness at epigastric area",
-  Imp: "R/O Gastritis",
-  temperature: "36.5",
-  bps: "120",
-  bpd: "80",
-  pulse: "72",
-  rr: "18",
+  // Patient condition
+  responseRequired: "",
+  additionalUrgencyValue: "false",
+  carRefer: "false",
+  useNurse: "false",
+  additionalComments: "",
+  notes: "",
+  // Visit data
+  visit_primary_symptom_main_symptom: "",
+  visit_primary_symptom_current_illness: "",
+  pe: "",
+  Imp: "",
+  moreDetail: "",
+  temperature: "",
+  bps: "",
+  bpd: "",
+  pulse: "",
+  rr: "",
+  // ICD-10
+  icd10Basic: "",
+  icd10: "",
+  icd10MoreBasic: "",
+  icd10More: "",
+  // Other
   deliveryPeriod: [],
   treatment: "",
-  icd10: [],
+  drugs: [],
+  drugAllergy: [],
+  vaccines: [],
+  vaccinesCovid: [],
+  requiredEquipment: [],
+  referralFiles: [],
+  patient_vn: "",
+  an: "",
 };
 
 /* ------------------------------------------------------------------ */

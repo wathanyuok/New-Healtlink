@@ -437,11 +437,14 @@ function NuxtDateRangePicker(props: {
           sx={{
             fontSize: 14,
             color: startDate && endDate ? "#111827" : "#9ca3af",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {display}
         </Typography>
-        <CalendarIcon sx={{ color: "#9ca3af", fontSize: 20 }} />
+        <CalendarIcon sx={{ color: "#9ca3af", fontSize: 20, flexShrink: 0 }} />
       </Box>
 
       <Popover
@@ -707,7 +710,7 @@ export default function ReferListLayout({
   const profile = useAuthStore((s) => s.profile);
   const optionHospital = useAuthStore((s) => s.optionHospital);
 
-  const { findAndCountReferral, updateReadReferral } = useReferralStore();
+  const { findAndCountReferral, updateReadReferral, findGroupCase } = useReferralStore();
 
   // Hospital form options (mirrors Nuxt composable)
   const {
@@ -1060,8 +1063,98 @@ export default function ReferListLayout({
     }
 
     if (actionType === "edit") {
-      // Simplified edit routing — send to /create/request or /create/opd with draft
       const kindName = item.referralKind?.name;
+
+      // --- EMERGENCY edit (refer-out/all) → /create/er ---
+      if (
+        pathname === "/refer-out/all" &&
+        kindName === "EMERGENCY" &&
+        item?.groupCase?.id
+      ) {
+        try {
+          const groupCaseRefer = await findGroupCase(item.groupCase.id.toString());
+          const docs = groupCaseRefer?.referralDocuments || [];
+          const hospitalsData = docs.map((hospital: any) => ({
+            id: hospital.id,
+            name: hospital.toHospital?.name || hospital.name,
+            phone: hospital.toHospital?.phone || hospital.phone,
+            zone: hospital.toHospital?.zone || hospital.zone,
+            subType: hospital.toHospital?.subType || hospital.subType,
+            selectedBranches: hospital.appointmentData
+              ? hospital.appointmentData.map((a: any) => ({
+                  value: a.doctorBranchObj?.id || a.doctorBranch,
+                  name: a.doctorBranchName,
+                }))
+              : [],
+          }));
+          const q = new URLSearchParams({
+            kind: "referER",
+            hospitals: JSON.stringify(hospitalsData),
+            draft: JSON.stringify({ id: item.id }),
+            groupCaseId: item.groupCase.id.toString(),
+          });
+          router.push(`/create/er?${q.toString()}`);
+        } catch (error) {
+          console.error("Error fetching group case:", error);
+        }
+        return;
+      }
+
+      // --- IPD edit (refer-out/all) → /create/ipd ---
+      if (
+        pathname === "/refer-out/all" &&
+        kindName === "IPD" &&
+        item?.groupCase?.id
+      ) {
+        try {
+          const groupCaseRefer = await findGroupCase(item.groupCase.id.toString());
+          const docs = groupCaseRefer?.referralDocuments || [];
+          const hospitalsData = docs.map((hospital: any) => ({
+            id: hospital.id,
+            name: hospital.toHospital?.name || hospital.name,
+            phone: hospital.toHospital?.phone || hospital.phone,
+            zone: hospital.toHospital?.zone || hospital.zone,
+            subType: hospital.toHospital?.subType || hospital.subType,
+            selectedBranches: hospital.appointmentData
+              ? hospital.appointmentData.map((a: any) => ({
+                  value: a.doctorBranchObj?.id || a.doctorBranch,
+                  name: a.doctorBranchName,
+                }))
+              : [],
+          }));
+          const q = new URLSearchParams({
+            kind: "referIPD",
+            hospitals: JSON.stringify(hospitalsData),
+            draft: JSON.stringify({ id: item.id }),
+            groupCaseId: item.groupCase.id.toString(),
+          });
+          router.push(`/create/ipd?${q.toString()}`);
+        } catch (error) {
+          console.error("Error fetching group case:", error);
+        }
+        return;
+      }
+
+      // --- OPD edit (refer-out/all, refer-back/all) → /create/opd ---
+      if (
+        (pathname === "/refer-out/all" || pathname === "/refer-back/all") &&
+        kindName === "OPD"
+      ) {
+        const q = new URLSearchParams({
+          kind: pathname === "/refer-out/all" ? "referOut" : "referBack",
+          hospital: item.toHospital?.name || "",
+          hospitalID: item.toHospital?.id?.toString() || "",
+          referPoint: (pathname === "/refer-out/all"
+            ? item.deliveryPointTypeEnd?.id
+            : item.deliveryPointTypeStart?.id
+          )?.toString() || "",
+          draft: JSON.stringify({ id: item.id }),
+        });
+        router.push(`/create/opd?${q.toString()}`);
+        return;
+      }
+
+      // --- Request refer out/back edit → /create/request ---
       if (pathname === "/request-refer-out/all" && kindName === "OPD") {
         const q = new URLSearchParams({
           kind: "requestReferOut",
@@ -1081,16 +1174,6 @@ export default function ReferListLayout({
           draft: JSON.stringify({ id: item.id }),
         });
         router.push(`/create/request?${q.toString()}`);
-        return;
-      }
-      if (pathname === "/refer-out/all" || pathname === "/refer-back/all") {
-        const q = new URLSearchParams({
-          kind: pathname === "/refer-out/all" ? "referOut" : "referBack",
-          hospital: item.toHospital?.name || "",
-          hospitalID: item.toHospital?.id?.toString() || "",
-          draft: JSON.stringify({ id: item.id }),
-        });
-        router.push(`/create/opd?${q.toString()}`);
         return;
       }
     }

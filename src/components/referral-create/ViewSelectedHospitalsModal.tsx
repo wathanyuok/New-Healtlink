@@ -3,23 +3,22 @@
 import React from "react";
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
+  Box,
+  Typography,
+  IconButton,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Typography,
   Avatar,
-  Chip,
-  Stack,
 } from "@mui/material";
+import { Close as CloseIcon, Phone as PhoneIcon } from "@mui/icons-material";
 import type { SelectedHospital } from "@/stores/referralCreateStore";
+
+const DEFAULT_AVATAR = "/images/Image_Avatar.png";
 
 interface ViewSelectedHospitalsModalProps {
   open: boolean;
@@ -33,49 +32,84 @@ export default function ViewSelectedHospitalsModal({
   hospitals,
 }: ViewSelectedHospitalsModalProps) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        รายการสถานพยาบาลที่ส่งไป
-      </DialogTitle>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 2, overflow: "hidden" } }}
+    >
+      {/* Blue header */}
+      <Box
+        sx={{
+          bgcolor: "#3b82f6",
+          px: 3,
+          py: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: "1.1rem" }}>
+          รายการสถานพยาบาลที่ส่งไป
+        </Typography>
+        <IconButton onClick={onClose} sx={{ color: "#fff" }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <DialogContent sx={{ p: 3 }}>
         {hospitals.length === 0 ? (
-          <Typography variant="body2" color="textSecondary" sx={{ py: 4, textAlign: "center" }}>
-            ไม่มีสถานพยาบาลที่เลือก
+          <Typography
+            variant="body2"
+            color="textSecondary"
+            sx={{ py: 4, textAlign: "center" }}
+          >
+            ไม่มีข้อมูลสถานพยาบาลที่เลือก
           </Typography>
         ) : (
-          <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #e5e7eb" }}>
-            <Table size="small">
+          <TableContainer>
+            <Table>
               <TableHead>
-                <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                  <TableCell sx={{ fontWeight: 600, width: 60 }}>ลำดับ</TableCell>
-                  <TableCell sx={{ fontWeight: 600, width: 60 }}>รูปภาพ</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>สถานพยาบาล</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>เบอร์โทรศัพท์</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>สาขา/แผนก</TableCell>
+                <TableRow
+                  sx={{
+                    bgcolor: "#036245",
+                    "& th": { color: "#fff", fontWeight: 600, fontSize: "0.9rem", textAlign: "center" },
+                  }}
+                >
+                  <TableCell>ลำดับ</TableCell>
+                  <TableCell>รูปภาพ</TableCell>
+                  <TableCell>ชื่อสถานพยาบาล</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {hospitals.map((h, i) => (
-                  <TableRow key={h.id}>
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell>
-                      <Avatar sx={{ width: 32, height: 32, bgcolor: "#e5e7eb" }}>
-                        {h.name?.charAt(0) || "H"}
-                      </Avatar>
+                  <TableRow
+                    key={h.id}
+                    sx={{ borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f9fafb" } }}
+                  >
+                    <TableCell sx={{ width: 80, textAlign: "center", fontSize: "1rem" }}>
+                      {i + 1}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    <TableCell sx={{ width: 80, textAlign: "center" }}>
+                      <Avatar
+                        src={(h as any).image || DEFAULT_AVATAR}
+                        alt={h.name}
+                        sx={{ width: 40, height: 40, mx: "auto" }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "center" }}>
+                      <Typography sx={{ fontWeight: 600, fontSize: "0.95rem" }}>
                         {h.name}
                       </Typography>
-                    </TableCell>
-                    <TableCell>{h.phone || "-"}</TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                        {(h.selectedBranches || []).map((b) => (
-                          <Chip key={b.value} label={b.name} size="small" />
-                        ))}
-                        {(!h.selectedBranches || h.selectedBranches.length === 0) && "-"}
-                      </Stack>
+                      {h.phone && (
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, mt: 0.5 }}>
+                          <PhoneIcon sx={{ fontSize: 14, color: "#9ca3af" }} />
+                          <Typography sx={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                            {h.phone}
+                          </Typography>
+                        </Box>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -84,11 +118,6 @@ export default function ViewSelectedHospitalsModal({
           </TableContainer>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="outlined">
-          ปิด
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }
