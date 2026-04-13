@@ -110,6 +110,8 @@ function RequestReferralInner() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Store draft's fromHospital locally (NOT in global optionHospital to avoid Navbar side-effect)
+  const draftFromHospitalRef = useRef<number | null>(null);
 
   // Track draft loaded state to signal form component
   const [draftLoaded, setDraftLoaded] = useState(0);
@@ -326,14 +328,16 @@ function RequestReferralInner() {
         }
         setReferInfo(doc);
 
-        // Set optionHospital from draft's fromHospital so dropdown APIs load
-        const fromHospitalId = doc.fromHospital?.id || doc.fromHospital;
-        if (fromHospitalId) {
-          const authState = useAuthStore.getState();
-          const roleName = authState.getRoleName();
-          if (roleName !== "superAdminHospital") {
-            authState.setOptionHospital(typeof fromHospitalId === "number" ? fromHospitalId : Number(fromHospitalId));
-          }
+        // NOTE: Do NOT set optionHospital here — it would show the hospital
+        // in the Navbar dropdown, which Nuxt does not do. The form's fetch
+        // useEffect reads hospitalID from searchParams instead.
+        // Instead, store the ORIGIN hospital in a local ref for the save function.
+        // NOTE: Nuxt swaps hospitals on save, so in DB:
+        //   fromHospital = destination (ปลายทาง), toHospital = origin (ต้นทาง)
+        // We need the origin for fromHospitalId in the save function.
+        const draftOriginId = doc.toHospital?.id || doc.toHospital;
+        if (draftOriginId) {
+          draftFromHospitalRef.current = typeof draftOriginId === "number" ? draftOriginId : Number(draftOriginId);
         }
 
         // Map nested API structure back to flat formData fields
@@ -394,12 +398,16 @@ function RequestReferralInner() {
           patient_changwat: patient.patient_changwat || "",
           patient_zipcode: patient.patient_zip_code || patient.patient_zipcode || "",
           patient_zip_code: patient.patient_zip_code || patient.patient_zipcode || "",
-          // Emergency contact
-          patient_contact_full_name: patient.patient_contact_full_name || "",
-          patient_contact_mobile_phone: patient.patient_contact_mobile_phone || "",
-          patient_contact_relation: patient.patient_contact_relation || "",
-          emergency_contacts: patient.patient_contact_full_name
-            ? [{ name: patient.patient_contact_full_name, phone: patient.patient_contact_mobile_phone || "", relation: patient.patient_contact_relation || "" }]
+          // Emergency contact — check nested data.patient first, then top-level fields as fallback
+          patient_contact_full_name: patient.patient_contact_full_name || doc.emergencyContactFullName || "",
+          patient_contact_mobile_phone: patient.patient_contact_mobile_phone || doc.emergencyContactTel || "",
+          patient_contact_relation: patient.patient_contact_relation || doc.emergencyContactRelated || "",
+          emergency_contacts: (patient.patient_contact_full_name || doc.emergencyContactFullName)
+            ? [{
+                name: patient.patient_contact_full_name || doc.emergencyContactFullName || "",
+                phone: patient.patient_contact_mobile_phone || doc.emergencyContactTel || "",
+                relation: patient.patient_contact_relation || doc.emergencyContactRelated || "",
+              }]
             : [],
           // Doctor info
           prescribingDoctor: String(doc.doctor?.id || doc.doctor || ""),
@@ -442,8 +450,30 @@ function RequestReferralInner() {
             : doc.data?.disease
               ? [{ id: 1, name: String(doc.data.disease) }]
               : [],
-          // Files
+          // Files — map API referralFiles to DocumentItem format used by form UI
           referralFiles: doc.referralFiles || [],
+          documents: (doc.referralFiles || [])
+            .filter((rf: any) => !rf.isDelete)
+            .map((rf: any, idx: number) => ({
+              id: rf.id || idx,
+              fileName: rf.name || "",
+              fileType: rf.name || "",
+              docCode: rf.code || "",
+              docName: rf.name || "",
+              detail: rf.detail || "",
+              dateTime: rf.createdAt || "",
+              files: Array.isArray(rf.url)
+                ? rf.url.map((f: any, fi: number) => ({
+                    id: fi,
+                    name: f.name || "",
+                    size: f.size || "",
+                    file: null as any,
+                    url: f.url || "",
+                  }))
+                : typeof rf.url === "string" && rf.url
+                  ? [{ id: 0, name: rf.url.split("/").pop() || "file", size: "", file: null as any, url: rf.url }]
+                  : [],
+            })),
         };
         updateFormData(draftFormData);
         // Signal form to pick up changes
@@ -631,7 +661,8 @@ function RequestReferralInner() {
         if (roleName === "superAdminHospital") {
           fromHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id ?? undefined;
         } else if (roleName === "superAdmin" || roleName === "superAdminZone") {
-          fromHospitalId = authState.optionHospital ?? undefined;
+          // Use global optionHospital first, then draft's stored fromHospital as fallback
+          fromHospitalId = authState.optionHospital ?? draftFromHospitalRef.current ?? undefined;
         }
 
         const toHospitalId = hospitalIDParam ? parseInt(hospitalIDParam, 10) : undefined;
@@ -687,15 +718,15 @@ function RequestReferralInner() {
           referralStatus,
           ...(referralTypeValue !== undefined ? { referralType: referralTypeValue } : {}),
 
-          // Delivery points
+          // Delivery points — must be numbers
           deliveryPointTypeEnd: deliveryPointTypeEnd || undefined,
-          deliveryPointTypeStart: formData.referralCreationPoint || undefined,
+          deliveryPointTypeStart: formData.referralCreationPoint ? Number(formData.referralCreationPoint) : undefined,
 
           // Appointment
           appointmentData,
 
-          // Doctor info
-          doctor: formData.prescribingDoctor || undefined,
+          // Doctor info — convert to number where Nuxt sends numbers
+          doctor: formData.prescribingDoctor ? Number(formData.prescribingDoctor) : undefined,
           doctorName: formData.docterName || undefined,
           doctorIdentifyNumber: formData.doctorCode || undefined,
           doctorDepartment: formData.medicalDepartment || undefined,
@@ -708,6 +739,12 @@ function RequestReferralInner() {
           moreDetail: formData.infectious_detail || formData.additionalComments || undefined,
           remark: formData.notes || undefined,
           reasonForSending: formData.notes || undefined,
+          // referralStatusDetail is integer in DB — only send if value is numeric (from a select with IDs)
+          ...(formData.referral_reason && /^\d+$/.test(String(formData.referral_reason))
+            ? { referralStatusDetail: formData.referral_reason }
+            : {}),
+          equipment: (formData.requiredEquipment || []).map((item: any) => typeof item === "string" ? item : item?.name || "").filter(Boolean),
+          isChangeDoctorBranch: false,
 
           // Patient identifiers
           HN: formData.patient_hn || undefined,
@@ -735,9 +772,9 @@ function RequestReferralInner() {
               patient_changwat: formData.patient_changwat || "",
               patient_zip_code: formData.patient_zipcode || "",
               patient_mobile_phone: formData.patient_phone || "",
-              patient_contact_full_name: formData.emergency_contacts?.[0]?.name || "",
-              patient_contact_mobile_phone: formData.emergency_contacts?.[0]?.phone || "",
-              patient_contact_relation: formData.emergency_contacts?.[0]?.relation || "",
+              patient_contact_full_name: formData.patient_contact_full_name || formData.emergency_contacts?.[0]?.name || "",
+              patient_contact_mobile_phone: formData.patient_contact_mobile_phone || formData.emergency_contacts?.[0]?.phone || "",
+              patient_contact_relation: formData.patient_contact_relation || formData.emergency_contacts?.[0]?.relation || "",
               patient_personal_disease: "",
             },
             physicalExam: formData.physicalExam || undefined,
@@ -748,6 +785,8 @@ function RequestReferralInner() {
               icd10_desc: item.name || item.icd10_desc || "",
             })),
             vaccines: formData.vaccines || [],
+            vaccinesCovid: [],
+            pre_diagnosis: null,
             visitData: {
               temperature: formData.temperature || "",
               bps: formData.bps || "",
@@ -767,7 +806,8 @@ function RequestReferralInner() {
             drugs: formData.medicines || [],
           },
           referralFiles: (formData.documents || []).map((doc: any) => ({
-            id: null, // New documents get null ID; server assigns real ID
+            // Only preserve real DB IDs (small numbers); timestamps from form are not valid DB IDs
+            id: doc.id && typeof doc.id === "number" && doc.id > 0 && doc.id < 1000000 ? doc.id : null,
             isDelete: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -784,6 +824,10 @@ function RequestReferralInner() {
             clinicName: null,
           })),
         };
+
+        // DEBUG: log payload to compare with Nuxt
+        console.log("[SavePayload] draftId:", draftId, "referInfo.id:", referInfo?.id);
+        console.log("[SavePayload]", JSON.stringify(payload, null, 2));
 
         // Run API call + minimum overlay time in parallel
         const overlayMinTime = new Promise((r) => setTimeout(r, 1500));

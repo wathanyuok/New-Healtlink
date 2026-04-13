@@ -67,8 +67,14 @@ const apiPost = async (url: string, data?: any) => {
 };
 
 const apiPut = async (url: string, data?: any) => {
-  const res = await api.put(url, data);
-  return res.data;
+  try {
+    const res = await api.put(url, data);
+    return res.data;
+  } catch (err: any) {
+    console.error("[apiPut] Error response:", JSON.stringify(err?.response?.data));
+    console.error("[apiPut] Status:", err?.response?.status, "headers:", JSON.stringify(err?.response?.headers));
+    throw err;
+  }
 };
 
 /* ------------------------------------------------------------------ */

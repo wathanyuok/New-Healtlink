@@ -129,6 +129,9 @@ export interface ReferralFormData {
   patient_phone: string;
   // Emergency contact
   emergency_contacts: EmergencyContact[];
+  patient_contact_full_name: string;
+  patient_contact_mobile_phone: string;
+  patient_contact_relation: string;
   // ER-only top-level schedule
   startDate: string; // yyyy-MM-dd
   startTime: string; // HH:mm
@@ -201,6 +204,9 @@ const defaultFormData: ReferralFormData = {
   patient_zipcode: "",
   patient_phone: "",
   emergency_contacts: [],
+  patient_contact_full_name: "",
+  patient_contact_mobile_phone: "",
+  patient_contact_relation: "",
   prescribingDoctor: "",
   doctorCode: "",
   medicalDepartment: "",
@@ -587,7 +593,7 @@ export default function RequestReferralForm({
     const authState = useAuthStore.getState();
     const profile: any = authState.profile;
     const hospitalId =
-      profile?.permissionGroup?.hospital?.id || optionHospital || null;
+      profile?.permissionGroup?.hospital?.id || optionHospital || searchParams.hospitalID || null;
     if (!hospitalId) return;
     (async () => {
       try {
@@ -615,7 +621,12 @@ export default function RequestReferralForm({
     const roleName = authState.getRoleName();
     let userHospitalId: string | undefined;
     if (roleName === "superAdmin") {
-      userHospitalId = optionHospital ? String(optionHospital) : undefined;
+      // Use navbar selection first, then URL hospitalID param as fallback
+      // (draft loading no longer sets optionHospital to avoid showing
+      // the hospital in the Navbar — matching Nuxt behavior)
+      userHospitalId = optionHospital
+        ? String(optionHospital)
+        : searchParams.hospitalID || undefined;
     } else {
       const ownHospitalId = (authProfile as any)?.permissionGroup?.hospital?.id;
       userHospitalId = ownHospitalId ? String(ownHospitalId) : undefined;
@@ -2312,9 +2323,9 @@ export default function RequestReferralForm({
                           fullWidth
                           size="small"
                           placeholder="กรอกข้อมูล"
-                          value={(form as any).patient_contact_full_name || ""}
+                          value={form.patient_contact_full_name || ""}
                           onChange={(e) =>
-                            updateField("patient_contact_full_name" as any, e.target.value)
+                            updateField("patient_contact_full_name", e.target.value)
                           }
                         />
                       </Box>
@@ -2324,9 +2335,9 @@ export default function RequestReferralForm({
                           fullWidth
                           size="small"
                           placeholder="กรอกข้อมูล"
-                          value={(form as any).patient_contact_mobile_phone || ""}
+                          value={form.patient_contact_mobile_phone || ""}
                           onChange={(e) =>
-                            updateField("patient_contact_mobile_phone" as any, e.target.value)
+                            updateField("patient_contact_mobile_phone", e.target.value)
                           }
                         />
                       </Box>
@@ -2336,9 +2347,9 @@ export default function RequestReferralForm({
                           fullWidth
                           size="small"
                           placeholder="กรอกข้อมูล"
-                          value={(form as any).patient_contact_relation || ""}
+                          value={form.patient_contact_relation || ""}
                           onChange={(e) =>
-                            updateField("patient_contact_relation" as any, e.target.value)
+                            updateField("patient_contact_relation", e.target.value)
                           }
                         />
                       </Box>

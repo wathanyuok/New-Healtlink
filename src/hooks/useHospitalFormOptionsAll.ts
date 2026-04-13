@@ -55,8 +55,13 @@ const transformOptions = (arr: any[]): OptionData[] => {
 };
 
 const apiGet = async (url: string, params?: any) => {
-  const res = await api.get(url, { params });
-  return res.data;
+  try {
+    const res = await api.get(url, { params });
+    return res.data;
+  } catch (err: any) {
+    console.error("[HospFormOpts] FAIL:", url, "params:", JSON.stringify(params), "error:", err?.response?.data?.message || err?.response?.status);
+    throw err;
+  }
 };
 
 /**
