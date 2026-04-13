@@ -104,17 +104,25 @@ function ERReferralInner() {
   // Load draft data if editing — map referInfo back into formData
   useEffect(() => {
     if (draftId) {
-      console.log("[ER Draft] Loading draft with ID:", draftId);
       findOneReferral(draftId).then((res: any) => {
-        console.log("[ER Draft] API response:", res);
         // Handle both possible structures
         const doc = res?.referralDocument || res;
         if (!doc || !doc.data) {
           console.warn("[ER Draft] No valid document found in response");
           return;
         }
-        console.log("[ER Draft] Document found:", doc.id, doc.referralStatus);
         setReferInfo(doc);
+
+        // Set optionHospital from draft's fromHospital so dropdown APIs load
+        const fromHospitalId = doc.fromHospital?.id || doc.fromHospital;
+        if (fromHospitalId) {
+          const authState = useAuthStore.getState();
+          const roleName = authState.getRoleName();
+          // For superAdmin / superAdminZone, set optionHospital from draft
+          if (roleName !== "superAdminHospital") {
+            authState.setOptionHospital(typeof fromHospitalId === "number" ? fromHospitalId : Number(fromHospitalId));
+          }
+        }
 
         // Map nested API structure back to flat formData fields
         const patient = doc.data?.patient || {};
@@ -153,24 +161,24 @@ function ERReferralInner() {
             ? [{ name: patient.patient_contact_full_name, phone: patient.patient_contact_mobile_phone || "", relation: patient.patient_contact_relation || "" }]
             : [],
           // Doctor info
-          prescribingDoctor: doc.doctor?.id || doc.doctor || "",
+          prescribingDoctor: String(doc.doctor?.id || doc.doctor || ""),
           doctorCode: doc.doctorIdentifyNumber || "",
           medicalDepartment: doc.doctorDepartment || "",
           doctorContactNumber: doc.doctorPhone || "",
           docterName: doc.doctorName || "",
-          // Referral info
-          referralCreationPoint: doc.deliveryPointTypeStart?.id || doc.deliveryPointTypeStart || "",
-          referral_cause: doc.referralCause?.id || doc.referralCause || "",
-          referral_reason: doc.referralStatusDetail?.id || doc.referralStatusDetail || "",
-          acute_level: doc.acuteLevel || "",
-          icu_level: doc.icuLevel || "",
-          icuLevel: doc.icuLevel || "",
+          // Referral info — convert to String for MUI Select matching
+          referralCreationPoint: String(doc.deliveryPointTypeStart?.id || doc.deliveryPointTypeStart || ""),
+          referral_cause: String(doc.referralCause?.id || doc.referralCause || ""),
+          referral_reason: String(doc.referralStatusDetail?.id || doc.referralStatusDetail || ""),
+          acute_level: doc.acuteLevel ? String(doc.acuteLevel?.id ?? doc.acuteLevel) : "",
+          icu_level: doc.icuLevel ? String(doc.icuLevel?.id ?? doc.icuLevel) : "",
+          icuLevel: doc.icuLevel ? String(doc.icuLevel?.id ?? doc.icuLevel) : "",
           additionalUrgencyValue: doc.contagious ? "true" : "false",
           car_refer: doc.carRefer ? "true" : "false",
           carRefer: doc.carRefer ? "true" : "false",
           use_nurse: doc.useNurse ? "true" : "false",
           useNurse: doc.useNurse ? "true" : "false",
-          is_infectious: doc.contagious ? "yes" : "no",
+          is_infectious: doc.contagious ? "true" : "false",
           additionalComments: doc.moreDetail || "",
           notes: doc.remark || "",
           // Visit data
@@ -197,7 +205,11 @@ function ERReferralInner() {
           vaccinesCovid: doc.data?.vaccinesCovid || [],
           physicalExam: doc.data?.physicalExam || "",
           disease: doc.data?.disease || "",
-          diseases: doc.data?.disease ? [{ id: 1, name: doc.data.disease }] : [], // form uses "diseases" array
+          diseases: Array.isArray(doc.data?.disease)
+            ? doc.data.disease
+            : doc.data?.disease
+              ? [{ id: 1, name: String(doc.data.disease) }]
+              : [],
           // Equipment
           requiredEquipment: (doc.equipment || []).map((name: string) => ({ name })),
           // Delivery period
@@ -206,7 +218,6 @@ function ERReferralInner() {
           // Files
           referralFiles: doc.referralFiles || [],
         };
-        console.log("[ER Draft] Mapped draftFormData:", draftFormData);
         updateFormData(draftFormData);
         // Signal form to pick up changes
         setDraftLoaded((c) => c + 1);
@@ -385,23 +396,23 @@ function ERReferralInner() {
             referralType: getReferralTypeNumber(kind),
           }),
           referralStatus,
-          deliveryPointTypeStart: formData.referralCreationPoint || undefined,
+          deliveryPointTypeStart: formData.referralCreationPoint ? Number(formData.referralCreationPoint) : undefined,
           appointmentData: getAppointmentData(),
 
           // Doctor info
-          doctor: formData.prescribingDoctor || undefined,
+          doctor: formData.prescribingDoctor ? Number(formData.prescribingDoctor) : undefined,
           doctorName: formData.docterName || formData.doctorName || undefined,
           doctorIdentifyNumber: formData.doctorCode || undefined,
           doctorDepartment: formData.medicalDepartment || undefined,
           doctorPhone: formData.doctorContactNumber ? String(formData.doctorContactNumber) : undefined,
 
           // Referral details
-          referralStatusDetail: formData.referral_reason || undefined,
+          referralStatusDetail: formData.referral_reason ? Number(formData.referral_reason) : undefined,
           remark: formData.notes || undefined,
-          referralCause: formData.referral_cause || formData.referralCause || undefined,
+          referralCause: formData.referral_cause || formData.referralCause ? Number(formData.referral_cause || formData.referralCause) : undefined,
           reasonForSending: formData.notes || undefined,
-          acuteLevel: formData.acute_level || formData.levelOfUrgency || undefined,
-          icuLevel: formData.icuLevel || undefined,
+          acuteLevel: formData.acute_level || formData.levelOfUrgency ? Number(formData.acute_level || formData.levelOfUrgency) : undefined,
+          icuLevel: formData.icuLevel || formData.icu_level ? Number(formData.icuLevel || formData.icu_level) : undefined,
           contagious: Boolean(formData.additionalUrgencyValue === "true"),
           carRefer: Boolean(formData.carRefer === "true"),
           useNurse: Boolean(formData.useNurse === "true"),
@@ -471,6 +482,8 @@ function ERReferralInner() {
           },
           referralFiles: formData.referralFiles || [],
         };
+
+        console.log("[ER Save] payload:", JSON.stringify(payload, null, 2));
 
         if (isDraftStatus && referInfo?.id) {
           await updateReferralDocument(referInfo.id, payload);

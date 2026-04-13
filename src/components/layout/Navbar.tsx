@@ -18,14 +18,13 @@ import IconButton from "@mui/material/IconButton";
 import { useAuthStore } from "@/stores/authStore";
 import { NAVBAR_HEIGHT } from "./Sidebar";
 import api from "@/lib/api";
-import { MOCK_HOSPITALS } from "@/mocks/dashboardMock";
 
 export default function Navbar() {
   const router = useRouter();
   const { profile, logout, setOptionHospital } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [selectedHospital, setSelectedHospital] = useState<string>("DD-002");
+  const [selectedHospital, setSelectedHospital] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
 
@@ -46,8 +45,8 @@ export default function Navbar() {
         const excludeId = (profile as any)?.permissionGroup?.hospital?.id;
         setHospitals(excludeId ? list.filter((h: any) => h.id !== excludeId) : list);
       } catch {
-        console.warn("[MOCK] Hospital API unavailable, using mock data");
-        setHospitals(MOCK_HOSPITALS);
+        console.warn("Hospital API unavailable");
+        setHospitals([]);
       } finally {
         setLoading(false);
       }
@@ -55,7 +54,19 @@ export default function Navbar() {
     load();
   }, [profile, isSuperAdminHospital]);
 
-  // Auto-set optionHospital in store when hospitals load and DD-002 is selected
+  // Sync from store's optionHospital → local selectedHospital
+  // (e.g. when draft loading sets optionHospital programmatically)
+  const storeOptionHospital = useAuthStore((s) => s.optionHospital);
+  useEffect(() => {
+    if (storeOptionHospital && !selectedHospital && hospitals.length > 0) {
+      const h = hospitals.find((h: any) => h.id === storeOptionHospital || String(h.id) === String(storeOptionHospital));
+      if (h) {
+        setSelectedHospital(String(h.id));
+      }
+    }
+  }, [storeOptionHospital, hospitals]);
+
+  // Auto-set optionHospital in store when hospitals load
   useEffect(() => {
     if (hospitals.length > 0 && selectedHospital) {
       const h = hospitals.find((h: any) => String(h.id) === selectedHospital || h.code === selectedHospital);
@@ -63,7 +74,7 @@ export default function Navbar() {
         setSelectedHospital(String(h.id));
         setOptionHospital(h.id);
       } else {
-        // DD-002 not found by id/code, select first hospital and keep DD-002 display
+        // Not found by id/code, select first hospital
         const first = hospitals[0];
         setOptionHospital(first.id);
       }

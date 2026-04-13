@@ -406,6 +406,7 @@ export default function RequestReferralForm({
     const merged = { ...defaultFormData };
     if (externalFormData) {
       Object.entries(externalFormData).forEach(([key, value]) => {
+        if (key.startsWith("_draft")) return; // skip internal metadata
         if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
           (merged as any)[key] = value;
         }
@@ -416,6 +417,10 @@ export default function RequestReferralForm({
   const [addressOpen, setAddressOpen] = useState(true);
   const [emergencyOpen, setEmergencyOpen] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Refs to hold draft doctor/cause data so they survive async fetch overwrites
+  const draftDoctorRef = useRef<any>(null);
+  const draftCauseRef = useRef<any>(null);
 
   // Document upload modal state
   const [showDocModal, setShowDocModal] = useState(false);
@@ -432,7 +437,7 @@ export default function RequestReferralForm({
   const [docDetailViewData, setDocDetailViewData] = useState<DocumentItem | null>(null);
 
   const resetDocModal = () => {
-    setDocModalData({ docCode: "", docName: "", detail: "", docType: "อื่นๆ", otherTypeDetail: "test", files: [] });
+    setDocModalData({ docCode: "", docName: "", detail: "", docType: "", otherTypeDetail: "", files: [] });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -517,23 +522,45 @@ export default function RequestReferralForm({
   useEffect(() => {
     if (draftLoaded === 0) return; // skip initial render
     if (!externalFormData) return;
-    console.log("[Form] draftLoaded triggered, externalFormData:", externalFormData);
     // Check if external data has meaningful content (not just empty defaults)
     const hasData = Object.values(externalFormData).some((v) =>
       v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
     );
-    console.log("[Form] hasData:", hasData);
     if (!hasData) return;
     setForm((prev) => {
       const merged = { ...prev };
       Object.entries(externalFormData).forEach(([key, value]) => {
+        // Skip internal metadata keys
+        if (key.startsWith("_draft")) return;
         if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
           (merged as any)[key] = value;
         }
       });
-      console.log("[Form] Merged form state — patient_pid:", merged.patient_pid, "patient_firstname:", merged.patient_firstname);
       return merged;
     });
+
+    // Store draft doctor/cause in refs so they survive fetch overwrites
+    const draftDoctorData = (externalFormData as any)?._draftDoctor;
+    if (draftDoctorData?.id) {
+      draftDoctorRef.current = draftDoctorData;
+      // Also inject immediately into store
+      const store = useReferralCreateStore.getState();
+      const existing = store.doctorUsers || [];
+      if (!existing.find((d: any) => String(d.id) === String(draftDoctorData.id))) {
+        useReferralCreateStore.setState({ doctorUsers: [...existing, draftDoctorData] });
+      }
+    }
+
+    const draftCauseData = (externalFormData as any)?._draftCause;
+    if (draftCauseData?.id) {
+      draftCauseRef.current = draftCauseData;
+      // Also inject immediately into store
+      const store = useReferralCreateStore.getState();
+      const existing = store.referralCauses || [];
+      if (!existing.find((c: any) => String(c.id) === String(draftCauseData.id))) {
+        useReferralCreateStore.setState({ referralCauses: [...existing, draftCauseData] });
+      }
+    }
   }, [draftLoaded, externalFormData]);
 
   const updateField = useCallback(
@@ -604,16 +631,36 @@ export default function RequestReferralForm({
     const referralType = kind === "requestReferOut" || kind === "referOut" || kind === "referER"
       ? "Refer Out - ส่งตัวออก"
       : "Refer Back - ส่งตัวกลับ";
-    fetchReferralCauses({
-      hospital: userHospitalId,
-      referralType,
-      ...(kind === "referER"
-        ? { isEr: "true", isActive: "true" }
-        : { isOpd: "true" }),
-    });
 
-    fetchDoctorUsers({
-      hospital: userHospitalId,
+    // Fetch and then re-inject any draft items that the fetch may overwrite
+    Promise.all([
+      fetchReferralCauses({
+        hospital: userHospitalId,
+        referralType,
+        ...(kind === "referER"
+          ? { isEr: "true", isActive: "true" }
+          : { isOpd: "true" }),
+      }),
+      fetchDoctorUsers({
+        hospital: userHospitalId,
+      }),
+    ]).then(() => {
+      // Re-inject draft doctor if it was set and is missing from fetched results
+      const dd = draftDoctorRef.current;
+      if (dd?.id) {
+        const store = useReferralCreateStore.getState();
+        if (!store.doctorUsers.find((d: any) => String(d.id) === String(dd.id))) {
+          useReferralCreateStore.setState({ doctorUsers: [...store.doctorUsers, dd] });
+        }
+      }
+      // Re-inject draft cause if it was set and is missing from fetched results
+      const dc = draftCauseRef.current;
+      if (dc?.id) {
+        const store = useReferralCreateStore.getState();
+        if (!store.referralCauses.find((c: any) => String(c.id) === String(dc.id))) {
+          useReferralCreateStore.setState({ referralCauses: [...store.referralCauses, dc] });
+        }
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, optionHospital, authProfile]);
@@ -1634,7 +1681,8 @@ export default function RequestReferralForm({
               </Typography>
               <Box sx={{ borderBottom: "2px solid #16a34a", mb: 2 }} />
 
-              {/* คนไข้เป็นโรคติดต่อ */}
+              {/* คนไข้เป็นโรคติดต่อ — เฉพาะ ER / refer-out / refer-back (ไม่มีใน request) */}
+              {kind !== "requestReferOut" && kind !== "requestReferBack" && (
               <Box sx={{ mb: 2 }}>
                 <Typography
                   sx={{ fontWeight: 500, fontSize: "0.95rem", mb: 1 }}
@@ -1672,6 +1720,7 @@ export default function RequestReferralForm({
                   />
                 )}
               </Box>
+              )}
 
               {/* ใช้รถส่งตัว + ใช้พยาบาล — เฉพาะ ER */}
               {kind === "referER" && (
@@ -2236,7 +2285,7 @@ export default function RequestReferralForm({
                 </Collapse>
               </Box>
 
-              {/* ติดต่อในกรณีฉุกเฉิน */}
+              {/* ติดต่อในกรณีฉุกเฉิน — flat fields matching Nuxt */}
               <Box sx={{ mb: 2 }}>
                 <Box
                   onClick={() => setEmergencyOpen(!emergencyOpen)}
@@ -2249,66 +2298,51 @@ export default function RequestReferralForm({
                 </Box>
                 <Collapse in={emergencyOpen}>
                   <Box sx={{ pt: 2 }}>
-                    {form.emergency_contacts.map((contact, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr 1fr",
-                          gap: 2,
-                          mb: 1,
-                        }}
-                      >
-                        <Box>
-                          <FieldLabel label="ชื่อ-นามสกุล" />
-                          <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="กรอกข้อมูล"
-                            value={contact.name}
-                            onChange={(e) =>
-                              updateEmergencyContact(
-                                index,
-                                "name",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </Box>
-                        <Box>
-                          <FieldLabel label="หมายเลขโทรศัพท์" />
-                          <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="กรอกข้อมูล"
-                            value={contact.phone}
-                            onChange={(e) =>
-                              updateEmergencyContact(
-                                index,
-                                "phone",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </Box>
-                        <Box>
-                          <FieldLabel label="เกี่ยวข้องเป็น" />
-                          <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="กรอกข้อมูล"
-                            value={contact.relation}
-                            onChange={(e) =>
-                              updateEmergencyContact(
-                                index,
-                                "relation",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </Box>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: 2,
+                        mb: 1,
+                      }}
+                    >
+                      <Box>
+                        <FieldLabel label="ชื่อ-นามสกุล" />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="กรอกข้อมูล"
+                          value={(form as any).patient_contact_full_name || ""}
+                          onChange={(e) =>
+                            updateField("patient_contact_full_name" as any, e.target.value)
+                          }
+                        />
                       </Box>
-                    ))}
+                      <Box>
+                        <FieldLabel label="หมายเลขโทรศัพท์" />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="กรอกข้อมูล"
+                          value={(form as any).patient_contact_mobile_phone || ""}
+                          onChange={(e) =>
+                            updateField("patient_contact_mobile_phone" as any, e.target.value)
+                          }
+                        />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="เกี่ยวข้องเป็น" />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="กรอกข้อมูล"
+                          value={(form as any).patient_contact_relation || ""}
+                          onChange={(e) =>
+                            updateField("patient_contact_relation" as any, e.target.value)
+                          }
+                        />
+                      </Box>
+                    </Box>
                   </Box>
                 </Collapse>
               </Box>

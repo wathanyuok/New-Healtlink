@@ -1135,6 +1135,39 @@ export default function ReferListLayout({
         return;
       }
 
+      // --- reqRefer items on refer-out/all → /create/request (matches Nuxt) ---
+      if (
+        pathname === "/refer-out/all" &&
+        kindName === "OPD" &&
+        item.reqRefer === true
+      ) {
+        const appointmentData = item.appointmentData;
+        const hasBranches = Array.isArray(appointmentData) && appointmentData.length > 0;
+        const q = new URLSearchParams({
+          kind: "requestReferOut",
+          hospital: item.fromHospital?.name || "",
+          hospitalID: item.fromHospital?.id?.toString() || "",
+          referPoint: item.deliveryPointTypeEnd?.id?.toString() || "",
+          deliveryPoint: item.deliveryPointTypeStart?.id ? "true" : "false",
+          docter_branch: appointmentData ? "true" : "false",
+          branch_ids: hasBranches
+            ? appointmentData.map((a: any) => a.doctorBranch).join(", ")
+            : "",
+          branch_names: hasBranches
+            ? appointmentData.map((a: any) => a.doctorBranchName).join(", ")
+            : "ไม่ระบุสาขา",
+          branch_type: hasBranches
+            ? appointmentData.map((a: any) => a.appointmentType).join(", ")
+            : "",
+          datetime: hasBranches
+            ? appointmentData.map((a: any) => a.appointmentDate).join(", ")
+            : "",
+          draft: JSON.stringify({ id: item.id }),
+        });
+        router.push(`/create/request?${q.toString()}`);
+        return;
+      }
+
       // --- OPD edit (refer-out/all, refer-back/all) → /create/opd ---
       if (
         (pathname === "/refer-out/all" || pathname === "/refer-back/all") &&
@@ -1156,11 +1189,27 @@ export default function ReferListLayout({
 
       // --- Request refer out/back edit → /create/request ---
       if (pathname === "/request-refer-out/all" && kindName === "OPD") {
+        const appointmentData = item.appointmentData;
+        const hasBranches = Array.isArray(appointmentData) && appointmentData.length > 0;
         const q = new URLSearchParams({
           kind: "requestReferOut",
           hospital: item.fromHospital?.name || "",
           hospitalID: item.fromHospital?.id?.toString() || "",
           referPoint: item.deliveryPointTypeEnd?.id?.toString() || "",
+          deliveryPoint: item.deliveryPointTypeStart?.id ? "true" : "false",
+          docter_branch: appointmentData ? "true" : "false",
+          branch_ids: hasBranches
+            ? appointmentData.map((a: any) => a.doctorBranch).join(", ")
+            : "",
+          branch_names: hasBranches
+            ? appointmentData.map((a: any) => a.doctorBranchName).join(", ")
+            : "ไม่ระบุสาขา",
+          branch_type: hasBranches
+            ? appointmentData.map((a: any) => a.appointmentType).join(", ")
+            : "",
+          datetime: hasBranches
+            ? appointmentData.map((a: any) => a.appointmentDate).join(", ")
+            : "",
           draft: JSON.stringify({ id: item.id }),
         });
         router.push(`/create/request?${q.toString()}`);

@@ -63,7 +63,18 @@ function RequestReferralInner() {
   const referPointParam = searchParams.get("referPoint");
   const referPointNameParam = searchParams.get("referPointName");
   const referPointPhoneParam = searchParams.get("referPointPhone");
-  const draftId = searchParams.get("draft");
+  const draftParam = searchParams.get("draft");
+
+  // draft param can be JSON string like '{"id":1607}' or plain id
+  const draftId = useMemo(() => {
+    if (!draftParam) return null;
+    try {
+      const parsed = JSON.parse(draftParam);
+      return parsed?.id?.toString() || draftParam;
+    } catch {
+      return draftParam;
+    }
+  }, [draftParam]);
 
   const isRequestReferBack = kind === "requestReferBack";
 
@@ -99,6 +110,9 @@ function RequestReferralInner() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track draft loaded state to signal form component
+  const [draftLoaded, setDraftLoaded] = useState(0);
 
   const isFormStep = !!(branchNamesParam && doctorBranchParam);
 
@@ -301,13 +315,144 @@ function RequestReferralInner() {
     }
   }, []);
 
+  // Load draft data if editing — map referInfo back into formData
   useEffect(() => {
     if (draftId) {
       findOneReferral(draftId).then((res: any) => {
-        if (res?.referralDocument) setReferInfo(res.referralDocument);
-      }).catch(console.error);
+        const doc = res?.referralDocument || res;
+        if (!doc || !doc.data) {
+          console.warn("[Request Draft] No valid document found in response");
+          return;
+        }
+        setReferInfo(doc);
+
+        // Set optionHospital from draft's fromHospital so dropdown APIs load
+        const fromHospitalId = doc.fromHospital?.id || doc.fromHospital;
+        if (fromHospitalId) {
+          const authState = useAuthStore.getState();
+          const roleName = authState.getRoleName();
+          if (roleName !== "superAdminHospital") {
+            authState.setOptionHospital(typeof fromHospitalId === "number" ? fromHospitalId : Number(fromHospitalId));
+          }
+        }
+
+        // Map nested API structure back to flat formData fields
+        const patient = doc.data?.patient || {};
+        const visitData = doc.data?.visitData || {};
+
+        // Calculate age from birthday
+        let calculatedAge = "";
+        const bday = patient.patient_birthday || "";
+        if (bday) {
+          const [by, bm, bd] = bday.split("-").map(Number);
+          if (by && bm && bd) {
+            const now = new Date();
+            let age = now.getFullYear() - by;
+            if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) {
+              age--;
+            }
+            if (age >= 0) calculatedAge = `${age} ปี`;
+          }
+        }
+
+        const draftFormData: Record<string, any> = {
+          // Pass draft doctor/cause data for form to inject into store after fetch
+          _draftDoctor: doc.doctor?.id ? {
+            id: doc.doctor.id,
+            name: doc.doctor.fullName || doc.doctorName || "",
+            email: doc.doctor.email || "",
+            phone: doc.doctor.phone || "",
+            licenseNumber: doc.doctor.identifyNumber || doc.doctorIdentifyNumber || "",
+            department: doc.doctor.department || doc.doctorDepartment || "",
+          } : null,
+          _draftCause: doc.referralCause?.id ? {
+            id: doc.referralCause.id,
+            name: doc.referralCause.name || "",
+          } : null,
+          // Patient info
+          patient_pid: patient.patient_pid || "",
+          patient_prefix: patient.patient_prefix || "",
+          patient_firstname: patient.patient_firstname || "",
+          patient_lastname: patient.patient_lastname || "",
+          patient_birthday: patient.patient_birthday || "",
+          patient_age: calculatedAge,
+          patient_sex: patient.patient_sex || "",
+          patient_blood_group: patient.patient_blood_group || "",
+          patient_treatment: patient.patient_treatment || "",
+          patient_treatment_hospital: patient.patient_treatment_hospital || "",
+          patient_phone: patient.patient_mobile_phone || patient.patient_phone || "",
+          patient_hn: doc.HN || "",
+          patient_vn: doc.VN || "",
+          patient_an: doc.AN || "",
+          // Patient address
+          patient_house: patient.patient_house || "",
+          patient_moo: patient.patient_moo || "",
+          patient_road: patient.patient_road || "",
+          patient_alley: patient.patient_alley || "",
+          patient_tambon: patient.patient_tambon || "",
+          patient_amphur: patient.patient_amphur || "",
+          patient_changwat: patient.patient_changwat || "",
+          patient_zipcode: patient.patient_zip_code || patient.patient_zipcode || "",
+          patient_zip_code: patient.patient_zip_code || patient.patient_zipcode || "",
+          // Emergency contact
+          patient_contact_full_name: patient.patient_contact_full_name || "",
+          patient_contact_mobile_phone: patient.patient_contact_mobile_phone || "",
+          patient_contact_relation: patient.patient_contact_relation || "",
+          emergency_contacts: patient.patient_contact_full_name
+            ? [{ name: patient.patient_contact_full_name, phone: patient.patient_contact_mobile_phone || "", relation: patient.patient_contact_relation || "" }]
+            : [],
+          // Doctor info
+          prescribingDoctor: String(doc.doctor?.id || doc.doctor || ""),
+          doctorCode: doc.doctorIdentifyNumber || "",
+          medicalDepartment: doc.doctorDepartment || "",
+          doctorContactNumber: doc.doctorPhone || "",
+          docterName: doc.doctorName || "",
+          // Referral info — convert to String for MUI Select matching
+          referralCreationPoint: String(doc.deliveryPointTypeStart?.id || doc.deliveryPointTypeStart || ""),
+          referral_cause: String(doc.referralCause?.id || doc.referralCause || ""),
+          acute_level: doc.acuteLevel ? String(doc.acuteLevel?.id ?? doc.acuteLevel) : "",
+          is_infectious: doc.contagious ? "true" : "false",
+          additionalComments: doc.moreDetail || "",
+          notes: doc.remark || "",
+          // Visit data
+          temperature: visitData.temperature || "",
+          bps: visitData.bps || "",
+          bpd: visitData.bpd || "",
+          pulse: visitData.pulse || "",
+          rr: visitData.rr || "",
+          visit_primary_symptom_main_symptom: visitData.visit_primary_symptom_main_symptom || "",
+          visit_primary_symptom_current_illness: visitData.visit_primary_symptom_current_illness || "",
+          pe: visitData.pe || "",
+          Imp: visitData.Imp || "",
+          moreDetail: visitData.moreDetail || "",
+          // ICD-10
+          icd10Basic: visitData.icd10Basic || "",
+          icd10: visitData.icd10 || [],
+          icd10MoreBasic: visitData.icd10MoreBasic || "",
+          icd10More: visitData.icd10More || [],
+          // Drugs, allergies, etc.
+          drugs: doc.data?.drugs || [],
+          medicines: doc.data?.drugs || [],
+          drugAllergy: doc.data?.drugAllergy || [],
+          vaccines: doc.data?.vaccines || [],
+          physicalExam: doc.data?.physicalExam || "",
+          disease: doc.data?.disease || "",
+          diseases: Array.isArray(doc.data?.disease)
+            ? doc.data.disease
+            : doc.data?.disease
+              ? [{ id: 1, name: String(doc.data.disease) }]
+              : [],
+          // Files
+          referralFiles: doc.referralFiles || [],
+        };
+        updateFormData(draftFormData);
+        // Signal form to pick up changes
+        setDraftLoaded((c) => c + 1);
+      }).catch((err) => {
+        console.error("[Request Draft] Error loading draft:", err);
+      });
     }
-  }, [draftId, findOneReferral, setReferInfo]);
+  }, [draftId, findOneReferral, setReferInfo, updateFormData]);
 
   const reloadHospitals = useCallback(
     (p?: number, s?: string, z?: string, t?: string, l?: number) => {
@@ -1356,6 +1501,7 @@ function RequestReferralInner() {
             formData={formData}
             onUpdate={updateFormData}
             formErrors={formErrors}
+            draftLoaded={draftLoaded}
           />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>
