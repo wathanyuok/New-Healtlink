@@ -21,8 +21,6 @@ import {
   RadioGroup,
   FormControlLabel,
   Collapse,
-  Dialog,
-  DialogContent,
   Autocomplete,
   Tooltip,
 } from "@mui/material";
@@ -31,17 +29,15 @@ import {
   Add as AddIcon,
   ExpandLess,
   ExpandMore,
-  CloudUpload as CloudUploadIcon,
   ImageOutlined as ImageIcon,
   Close as CloseIcon,
-  Save as SaveIcon,
-  ArrowBack as ArrowBackIcon,
   HelpOutline as HelpOutlineIcon,
 } from "@mui/icons-material";
 import { useReferralCreateStore } from "@/stores/referralCreateStore";
 import { useAuthStore } from "@/stores/authStore";
 import ThaiDateInput from "@/components/shared/ThaiDateInput";
 import ThaiTimeInput from "@/components/shared/ThaiTimeInput";
+import TreatmentDocuments, { type DocumentItem, type UploadedFileItem } from "@/components/shared/TreatmentDocuments";
 import api from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
@@ -83,23 +79,7 @@ interface EmergencyContact {
   phone: string;
   relation: string;
 }
-interface UploadedFileItem {
-  id: number;
-  name: string;
-  size: string;
-  file: File;
-  url: string;
-}
-interface DocumentItem {
-  id: number;
-  fileName: string;
-  fileType: string; // "X-ray" | "Lab" | "MRI" | "อื่นๆ"
-  docCode: string;
-  docName: string;
-  detail: string;
-  dateTime: string;
-  files: UploadedFileItem[];
-}
+// DocumentItem and UploadedFileItem are imported from TreatmentDocuments
 
 export interface ReferralFormData {
   // Patient info
@@ -428,90 +408,14 @@ export default function RequestReferralForm({
   const draftDoctorRef = useRef<any>(null);
   const draftCauseRef = useRef<any>(null);
 
-  // Document upload modal state
-  const [showDocModal, setShowDocModal] = useState(false);
-  const [docModalData, setDocModalData] = useState({
-    docCode: "",
-    docName: "",
-    detail: "",
-    docType: "",
-    otherTypeDetail: "",
-    files: [] as UploadedFileItem[],
-  });
-  const docFileInputRef = useRef<HTMLInputElement>(null);
-  const [showDocDetailModal, setShowDocDetailModal] = useState(false);
-  const [docDetailViewData, setDocDetailViewData] = useState<DocumentItem | null>(null);
-
-  const resetDocModal = () => {
-    setDocModalData({ docCode: "", docName: "", detail: "", docType: "", otherTypeDetail: "", files: [] });
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
-  const handleDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
-    const newFiles: UploadedFileItem[] = [];
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`ไฟล์ "${file.name}" ขนาดเกิน 10 MB`);
-        continue;
-      }
-      newFiles.push({
-        id: Date.now() + i,
-        name: file.name,
-        size: formatFileSize(file.size),
-        file,
-        url: URL.createObjectURL(file),
-      });
-    }
-    setDocModalData((prev) => ({ ...prev, files: [...prev.files, ...newFiles] }));
-    // Reset input so same file can be selected again
-    if (docFileInputRef.current) docFileInputRef.current.value = "";
-  };
-
-  const removeDocFile = (fileId: number) => {
-    setDocModalData((prev) => ({ ...prev, files: prev.files.filter((f) => f.id !== fileId) }));
-  };
-
-  const handleDocModalSave = () => {
-    if (!docModalData.docType) {
-      alert("กรุณาเลือกประเภทเอกสาร");
-      return;
-    }
-    if (docModalData.docType === "อื่นๆ" && !docModalData.otherTypeDetail.trim()) {
-      alert("กรุณาระบุรายละเอียดสำหรับประเภทเอกสาร \"อื่นๆ\"");
-      return;
-    }
-    if (docModalData.docType !== "อื่นๆ" && docModalData.files.length === 0) {
-      alert("กรุณาอัพโหลดไฟล์ก่อน");
-      return;
-    }
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, "0");
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const yyyy = now.getFullYear() + 543;
-    const hh = String(now.getHours()).padStart(2, "0");
-    const min = String(now.getMinutes()).padStart(2, "0");
-    const dateTimeStr = `${dd}/${mm}/${yyyy} ${hh}:${min} น.`;
-    const newDoc: DocumentItem = {
-      id: Date.now(),
-      fileName: docModalData.files.map((f) => f.name).join(", ") || "-",
-      fileType: docModalData.docType,
-      docCode: docModalData.docCode,
-      docName: docModalData.docName,
-      detail: docModalData.docType === "อื่นๆ" ? docModalData.otherTypeDetail : docModalData.detail,
-      dateTime: dateTimeStr,
-      files: docModalData.files,
-    };
+  // Document add/remove handlers — TreatmentDocuments manages its own modal state
+  const handleAddDocument = (newDoc: DocumentItem) => {
     updateField("documents", [...form.documents, newDoc]);
-    resetDocModal();
-    setShowDocModal(false);
+  };
+
+  const handleRemoveDocument = (index: number) => {
+    const updated = form.documents.filter((_: any, i: number) => i !== index);
+    updateField("documents", updated);
   };
 
   // Sync initial form values back to the store on mount
@@ -2729,10 +2633,13 @@ export default function RequestReferralForm({
                   key={item.id ?? `icd10-${index}`}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr auto",
+                    gridTemplateColumns: "1fr 1fr 1fr",
                     gap: 2,
                     mb: 2,
                     alignItems: "end",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 1,
+                    p: 2,
                   }}
                 >
                   <Box>
@@ -2855,29 +2762,8 @@ export default function RequestReferralForm({
                       )}
                     />
                   </Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      pb: 0.25,
-                    }}
-                  >
-                    <IconButton
-                      onClick={() => removeICD10(index)}
-                      sx={{
-                        bgcolor: "#ef4444",
-                        color: "#fff",
-                        "&:hover": { bgcolor: "#dc2626" },
-                        width: 40,
-                        height: 40,
-                      }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
                 </Box>
               ))}
-              <AddButton onClick={addICD10} />
             </Box>
 
             {/* รายการโรคร่วมที่ต้องการให้รักษา */}
@@ -3188,403 +3074,13 @@ export default function RequestReferralForm({
         {/* ============================================================ */}
         {/*  FULL WIDTH: เอกสารประกอบการรักษา                               */}
         {/* ============================================================ */}
-        <Box
-          sx={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 2,
-            overflow: "hidden",
-            mb: 2,
-          }}
-        >
-          <SectionHeader title="เอกสารประกอบการรักษา" />
-          <Box sx={{ p: 2 }}>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                mb: 2,
-              }}
-            >
-              <Typography sx={{ fontWeight: 500 }}>
-                อัพโหลดเอกสารเพิ่มเติม
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<CloudUploadIcon />}
-                onClick={() => { resetDocModal(); setShowDocModal(true); }}
-                sx={{
-                  textTransform: "none",
-                  borderColor: "#00AF75",
-                  color: "#00AF75",
-                  "&:hover": { borderColor: "#036245", color: "#036245" },
-                }}
-              >
-                เพิ่มรายการ
-              </Button>
-            </Box>
-
-            <TableContainer
-              sx={{
-                boxShadow: "none",
-                border: "1px solid #e5e7eb",
-                borderRadius: 1,
-              }}
-            >
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                    <TableCell
-                      sx={{ fontWeight: 600, textAlign: "center", width: 60 }}
-                    >
-                      ลำดับ
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      ไฟล์แนบ
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      ประเภทเอกสาร
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      รหัสเอกสาร
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      ชื่อเอกสาร
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      รายละเอียด
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      วัน/เวลา
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>
-                      จัดการ
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {form.documents.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
-                        <Typography variant="body2" color="textSecondary">
-                          ไม่มีข้อมูลเอกสาร คลิก &quot;เพิ่มรายการ&quot;
-                          เพื่อเพิ่มเอกสารใหม่
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    form.documents.map((doc, index) => (
-                      <TableRow key={doc.id}>
-                        <TableCell align="center">{index + 1}</TableCell>
-                        <TableCell align="center">
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => { setDocDetailViewData(doc); setShowDocDetailModal(true); }}
-                            sx={{
-                              textTransform: "none",
-                              fontSize: "0.75rem",
-                              borderColor: "#6b7280",
-                              color: "#374151",
-                              "&:hover": { borderColor: "#374151" },
-                              minWidth: 0,
-                              px: 1.5,
-                            }}
-                            startIcon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}
-                          >
-                            เปิดดู
-                          </Button>
-                        </TableCell>
-                        <TableCell align="center">{doc.fileType}</TableCell>
-                        <TableCell align="center">{doc.docCode || "-"}</TableCell>
-                        <TableCell align="center">{doc.docName || "-"}</TableCell>
-                        <TableCell align="center">{doc.detail || "-"}</TableCell>
-                        <TableCell align="center">{doc.dateTime}</TableCell>
-                        <TableCell align="center">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              const updated = form.documents.filter((_, i) => i !== index);
-                              updateField("documents", updated);
-                            }}
-                            sx={{ bgcolor: "#ef4444", color: "#fff", "&:hover": { bgcolor: "#dc2626" }, width: 32, height: 32 }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {form.documents.length > 0 && (
-              <Box sx={{ bgcolor: "#e5e7eb", px: 2, py: 0.75, borderRadius: "0 0 4px 4px" }}>
-                <Typography sx={{ fontSize: "0.8rem", fontWeight: 500 }}>
-                  ทั้งหมด {form.documents.length} เอกสาร
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </Box>
+        <TreatmentDocuments
+          documents={form.documents}
+          onAddDocument={handleAddDocument}
+          onRemoveDocument={handleRemoveDocument}
+        />
       </Box>
 
-      {/* ========== Document Detail View Modal ========== */}
-      <Dialog
-        open={showDocDetailModal}
-        onClose={() => setShowDocDetailModal(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2, overflow: "hidden" } }}
-      >
-        <Box sx={{ bgcolor: "#00AF75", px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: "1.1rem" }}>
-            รายละเอียดไฟล์แนบ
-          </Typography>
-          <IconButton onClick={() => setShowDocDetailModal(false)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-        <DialogContent sx={{ p: 3 }}>
-          {docDetailViewData && (
-            <Box>
-              <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1, borderRadius: 1, mb: 1 }}>
-                <Typography sx={{ fontWeight: 600, color: "#036245" }}>รายละเอียด</Typography>
-              </Box>
-              <Box sx={{ border: "1px solid #e5e7eb", borderRadius: 1, p: 2, mb: 2 }}>
-                <Typography>{docDetailViewData.detail || "-"}</Typography>
-              </Box>
-              {docDetailViewData.files && docDetailViewData.files.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Box sx={{ bgcolor: "#dcfce7", px: 2, py: 1, borderRadius: 1, mb: 1 }}>
-                    <Typography sx={{ fontWeight: 600, color: "#036245" }}>ไฟล์แนบ ({docDetailViewData.files.length} ไฟล์)</Typography>
-                  </Box>
-                  {docDetailViewData.files.map((f) => (
-                    <Box key={f.id} sx={{ border: "1px solid #e5e7eb", borderRadius: 1, p: 2, mb: 1 }}>
-                      {f.name.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ? (
-                        <Box sx={{ textAlign: "center" }}>
-                          <img src={f.url} alt={f.name} style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 4 }} />
-                          <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#6b7280" }}>{f.name} ({f.size})</Typography>
-                        </Box>
-                      ) : (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Typography sx={{ flex: 1 }}>{f.name} ({f.size})</Typography>
-                          <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ color: "#00AF75", fontWeight: 600 }}>เปิดไฟล์</a>
-                        </Box>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-          )}
-          <Box sx={{ mt: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => setShowDocDetailModal(false)}
-              sx={{ textTransform: "none", borderColor: "#00AF75", color: "#00AF75", "&:hover": { borderColor: "#036245", color: "#036245" } }}
-            >
-              ยกเลิก
-            </Button>
-          </Box>
-        </DialogContent>
-      </Dialog>
-
-      {/* ========== Document Upload Modal ========== */}
-      <Dialog
-        open={showDocModal}
-        onClose={() => setShowDocModal(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2, overflow: "hidden" } }}
-      >
-        {/* Header */}
-        <Box sx={{ bgcolor: "#00AF75", px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: "1.1rem" }}>
-            เพิ่มไฟล์เอกสารประกอบการรักษา
-          </Typography>
-          <IconButton onClick={() => setShowDocModal(false)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-
-        <DialogContent sx={{ p: 3 }}>
-          {/* เลขที่เอกสาร */}
-          <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>เลขที่เอกสาร</Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="เลขที่เอกสาร(ถ้ามี)"
-              value={docModalData.docCode}
-              onChange={(e) => setDocModalData((p) => ({ ...p, docCode: e.target.value }))}
-            />
-          </Box>
-
-          {/* ชื่อเอกสาร */}
-          <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>ชื่อเอกสาร</Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="ชื่อเอกสาร(ถ้าต้องการระบุ)"
-              value={docModalData.docName}
-              onChange={(e) => setDocModalData((p) => ({ ...p, docName: e.target.value }))}
-            />
-          </Box>
-
-          {/* รายละเอียด */}
-          <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>รายละเอียด</Typography>
-            <TextField
-              fullWidth
-              size="small"
-              multiline
-              rows={3}
-              placeholder="รายละเอียด"
-              value={docModalData.detail}
-              onChange={(e) => setDocModalData((p) => ({ ...p, detail: e.target.value }))}
-            />
-          </Box>
-
-          {/* รายละเอียด label + ประเภทเอกสาร */}
-          <Box sx={{ mb: 2 }}>
-            <Typography sx={{ fontWeight: 500, mb: 0.5 }}>
-              ประเภทเอกสาร <span style={{ color: "#ef4444" }}>*</span>
-            </Typography>
-            <RadioGroup
-              row
-              value={docModalData.docType}
-              onChange={(e) => setDocModalData((p) => ({ ...p, docType: e.target.value }))}
-            >
-              <FormControlLabel value="X-ray" control={<Radio size="small" />} label="X-ray" />
-              <FormControlLabel value="Lab" control={<Radio size="small" />} label="Lab" />
-              <FormControlLabel value="MRI" control={<Radio size="small" />} label="MRI" />
-              <FormControlLabel value="อื่นๆ" control={<Radio size="small" />} label="อื่นๆ" />
-            </RadioGroup>
-            {docModalData.docType === "อื่นๆ" && (
-              <Box sx={{ mt: 1, border: docModalData.docType === "อื่นๆ" && !docModalData.otherTypeDetail.trim() ? "1px solid #ef4444" : "1px solid #e5e7eb", borderRadius: 1, p: 0 }}>
-                <Typography sx={{ fontWeight: 500, fontSize: "0.85rem", mb: 0.5, px: 1.5, pt: 1 }}>
-                  ระบุรายละเอียด <span style={{ color: "#ef4444" }}>*</span>
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  multiline
-                  rows={3}
-                  placeholder="ขอความอื่นๆ"
-                  value={docModalData.otherTypeDetail}
-                  onChange={(e) => setDocModalData((p) => ({ ...p, otherTypeDetail: e.target.value }))}
-                  sx={{ "& .MuiOutlinedInput-notchedOutline": { border: "none" } }}
-                />
-              </Box>
-            )}
-          </Box>
-
-          {/* Uploaded files list */}
-          {docModalData.files.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              <Typography sx={{ fontWeight: 500, mb: 1 }}>
-                ไฟล์ที่อัพโหลด ({docModalData.files.length} ไฟล์)
-              </Typography>
-              {docModalData.files.map((f) => (
-                <Box
-                  key={f.id}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 1,
-                    p: 1.5,
-                    mb: 1,
-                    bgcolor: "#f9fafb",
-                  }}
-                >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ color: "#9ca3af", flexShrink: 0, marginRight: 12 }}>
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 500 }}>{f.name}</Typography>
-                    <Typography sx={{ fontSize: "0.75rem", color: "#9ca3af" }}>{f.size}</Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={() => removeDocFile(f.id)}
-                    sx={{ bgcolor: "#ef4444", color: "#fff", "&:hover": { bgcolor: "#dc2626" }, width: 32, height: 32 }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          {/* File upload area */}
-          <Box
-            onClick={() => docFileInputRef.current?.click()}
-            sx={{
-              border: "2px dashed #CBD5E1",
-              borderRadius: 1,
-              p: 2,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 1,
-              cursor: "pointer",
-              bgcolor: "#f9fafb",
-              "&:hover": { bgcolor: "#f0fdf4" },
-              mb: 1,
-            }}
-          >
-            <CloudUploadIcon sx={{ color: "#6b7280" }} />
-            <Typography sx={{ color: "#374151" }}>
-              เลือกอัพโหลดไฟล์
-            </Typography>
-          </Box>
-          <input
-            ref={docFileInputRef}
-            type="file"
-            hidden
-            multiple
-            accept="image/*,.pdf,.doc,.docx"
-            onChange={handleDocFileChange}
-          />
-          <Typography variant="caption" sx={{ color: "#9ca3af" }}>
-            กำหนดขนาดไฟล์แนบสูงสุด 10 MB
-          </Typography>
-
-          {/* Footer buttons */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", mt: 3 }}>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => setShowDocModal(false)}
-              sx={{
-                textTransform: "none",
-                borderColor: "#00AF75",
-                color: "#00AF75",
-                "&:hover": { borderColor: "#036245", color: "#036245" },
-              }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<SaveIcon />}
-              onClick={handleDocModalSave}
-              sx={{
-                textTransform: "none",
-                bgcolor: "#00AF75",
-                "&:hover": { bgcolor: "#036245" },
-              }}
-            >
-              บันทึกข้อมูล
-            </Button>
-          </Box>
-        </DialogContent>
-      </Dialog>
     </Paper>
   );
 }

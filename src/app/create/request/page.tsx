@@ -454,14 +454,28 @@ function RequestReferralInner() {
           referralFiles: doc.referralFiles || [],
           documents: (doc.referralFiles || [])
             .filter((rf: any) => !rf.isDelete)
-            .map((rf: any, idx: number) => ({
+            .map((rf: any, idx: number) => {
+              // Format createdAt ISO string to Thai Buddhist era format
+              let formattedDate = "";
+              if (rf.createdAt) {
+                const d = new Date(rf.createdAt);
+                if (!isNaN(d.getTime())) {
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  const yyyy = d.getFullYear() + 543;
+                  const hh = String(d.getHours()).padStart(2, "0");
+                  const min = String(d.getMinutes()).padStart(2, "0");
+                  formattedDate = `${dd}/${mm}/${yyyy} ${hh}:${min} น.`;
+                }
+              }
+              return {
               id: rf.id || idx,
               fileName: rf.name || "",
               fileType: rf.name || "",
               docCode: rf.code || "",
               docName: rf.name || "",
               detail: rf.detail || "",
-              dateTime: rf.createdAt || "",
+              dateTime: formattedDate,
               files: Array.isArray(rf.url)
                 ? rf.url.map((f: any, fi: number) => ({
                     id: fi,
@@ -473,7 +487,7 @@ function RequestReferralInner() {
                 : typeof rf.url === "string" && rf.url
                   ? [{ id: 0, name: rf.url.split("/").pop() || "file", size: "", file: null as any, url: rf.url }]
                   : [],
-            })),
+            };}),
         };
         updateFormData(draftFormData);
         // Signal form to pick up changes
@@ -918,17 +932,43 @@ function RequestReferralInner() {
     });
   }, [kind, hospitalParam, hospitalIDParam, deliveryPointParam, doctorBranchParam, branchNamesParam, buildQuery]);
 
+  const isDraftStatus = !!draftId;
+  const draftStatusName = referInfo?.referralStatus?.name;
+
   const ActionButtons = () => (
     <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
       {isFormStep && (
         <>
-          <Button variant="outlined" startIcon={isLoading ? <CircularProgress size={18} /> : <SaveIcon />} onClick={() => handleSave("draft")} disabled={isLoading || sendData} sx={{ textTransform: "none" }}>
-            {isLoading ? "กำลังบันทึก..." : "บันทึกฉบับร่าง"}
-          </Button>
-          <Button variant="contained" startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : <SendIcon />} onClick={() => handleSave("submit")} disabled={isLoading || sendData}
-            sx={{ bgcolor: "#00AF75", "&:hover": { bgcolor: "#036245" }, textTransform: "none" }}>
-            {isLoading ? "กำลังบันทึก..." : "บันทึกและส่งคำขอ"}
-          </Button>
+          {/* Case 1: New document (not editing draft) */}
+          {!isDraftStatus && (
+            <>
+              <Button variant="outlined" startIcon={isLoading ? <CircularProgress size={18} /> : <SaveIcon />} onClick={() => handleSave("draft")} disabled={isLoading || sendData} sx={{ textTransform: "none" }}>
+                {isLoading ? "กำลังบันทึก..." : "บันทึกฉบับร่าง"}
+              </Button>
+              <Button variant="contained" startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : <SendIcon />} onClick={() => handleSave("submit")} disabled={isLoading || sendData}
+                sx={{ bgcolor: "#00AF75", "&:hover": { bgcolor: "#036245" }, textTransform: "none" }}>
+                {isLoading ? "กำลังบันทึก..." : "บันทึกและส่งตัว"}
+              </Button>
+            </>
+          )}
+          {/* Case 2: Editing draft with status "ฉบับร่าง" */}
+          {isDraftStatus && draftStatusName === "ฉบับร่าง" && (
+            <>
+              <Button variant="outlined" startIcon={isLoading ? <CircularProgress size={18} /> : <SaveIcon />} onClick={() => handleSave("draft")} disabled={isLoading || sendData} sx={{ textTransform: "none" }}>
+                {isLoading ? "กำลังบันทึก..." : "บันทึกและแก้ไขฉบับร่าง"}
+              </Button>
+              <Button variant="contained" startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : <SendIcon />} onClick={() => handleSave("submit")} disabled={isLoading || sendData}
+                sx={{ bgcolor: "#00AF75", "&:hover": { bgcolor: "#036245" }, textTransform: "none" }}>
+                {isLoading ? "กำลังบันทึก..." : "บันทึกส่งตัว"}
+              </Button>
+            </>
+          )}
+          {/* Case 3: Editing draft with status "รอตอบรับ" — only one button */}
+          {isDraftStatus && draftStatusName === "รอตอบรับ" && (
+            <Button variant="outlined" startIcon={isLoading ? <CircularProgress size={18} /> : <SaveIcon />} onClick={() => handleSave("submit")} disabled={isLoading || sendData} sx={{ textTransform: "none" }}>
+              {isLoading ? "กำลังบันทึก..." : "บันทึกและแก้ไข"}
+            </Button>
+          )}
         </>
       )}
     </Stack>
