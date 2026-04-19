@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useState, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Box,
   Typography,
@@ -43,6 +43,7 @@ import Image from "next/image";
 import { useReferralStore } from "@/stores/referralStore";
 import { useHospitalStore } from "@/stores/hospitalStore";
 
+
 /* ------------------------------------------------------------------ */
 /*  Helper: format date string to Thai Buddhist era                    */
 /* ------------------------------------------------------------------ */
@@ -74,6 +75,31 @@ function fmtDateOnly(d: any) {
   } catch {
     return String(d);
   }
+}
+
+/** Format ISO date string directly (no new Date()) to dd/mm/YYYY+543 — matches Nuxt formatStartDateThai */
+function fmtDateThaiDirect(d: any): string {
+  if (!d || typeof d !== "string") return "-";
+  try {
+    const datePart = d.includes("T") ? d.split("T")[0] : d;
+    const [year, month, day] = datePart.split("-").map(Number);
+    if (!year || !month || !day) return "-";
+    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year + 543}`;
+  } catch { return "-"; }
+}
+
+/** Extract time from ISO string directly (no timezone conversion) — matches Nuxt formatEndTime */
+function fmtTimeDirect(d: any): string {
+  if (!d || typeof d !== "string") return "-";
+  try {
+    if (!d.includes("T")) return "-";
+    const timePart = d.split("T")[1];
+    if (!timePart) return "-";
+    const timeOnly = timePart.replace(/\.\d{3}Z?$/, "").replace(/[+-]\d{2}:\d{2}$/, "");
+    if (/^\d{2}:\d{2}:\d{2}$/.test(timeOnly)) return timeOnly;
+    if (/^\d{2}:\d{2}$/.test(timeOnly)) return `${timeOnly}:00`;
+    return "-";
+  } catch { return "-"; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -534,44 +560,43 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
           <InfoField label="VN ล่าสุด" value={doc.VN} />
         </Box>
 
-        {/* สิทธิ์การรักษา / สิทธิ์สถานพยาบาล — 2 columns */}
+        {/* สิทธิ์การรักษา / สิทธิ์สถานพยาบาล — 2 columns (Nuxt: patient_treatment / patient_treatment_hospital) */}
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 1 }}>
-          <InfoField label="สิทธิ์การรักษา" value={patient.patient_right || doc.data?.patient?.patient_right} />
-          <InfoField label="สิทธิ์สถานพยาบาล" value={patient.patient_hospital_right || doc.data?.patient?.patient_hospital_right} />
+          <InfoField label="สิทธิ์การรักษา" value={patient.patient_treatment || patient.patient_right || doc.data?.patient?.patient_treatment || doc.data?.patient?.patient_right} />
+          <InfoField label="สิทธิ์สถานพยาบาล" value={patient.patient_treatment_hospital || patient.patient_hospital_right || doc.data?.patient?.patient_treatment_hospital || doc.data?.patient?.patient_hospital_right} />
         </Box>
 
-        {/* ── ที่อยู่ผู้ป่วย — collapsible ── */}
+        {/* ── ที่อยู่ผู้ป่วย — collapsible (matches Nuxt patient-info.vue) ── */}
         <Box
           onClick={() => setShowAddress(!showAddress)}
           sx={{ borderBottom: "1px solid #CBD5E1", display: "flex", alignItems: "center", justifyContent: "space-between", p: 2, cursor: "pointer" }}
         >
-          <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245", textDecoration: "underline" }}>
+          <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>
             ที่อยู่ผู้ป่วย
           </Typography>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="#6b7280" style={{ transition: "transform 0.2s", transform: showAddress ? "rotate(180deg)" : "rotate(0deg)" }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transition: "transform 0.2s", transform: showAddress ? "rotate(180deg)" : "rotate(0deg)" }}>
             <path d="M4 6l4 4 4-4" stroke="#6b7280" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </Box>
         {showAddress && (
           <Box sx={{ mt: 1 }}>
             {/* Row 1: บ้านเลขที่ / หมู่ / ถนน/สาย / ซอย/ตรอก — 4 columns */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, p: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, p: 2, borderBottom: "1px solid #e5e7eb" }}>
               <InfoField label="บ้านเลขที่" value={patient.patient_house} />
               <InfoField label="หมู่" value={patient.patient_moo} />
               <InfoField label="ถนน/สาย" value={patient.patient_road} />
               <InfoField label="ซอย/ตรอก" value={patient.patient_alley} />
             </Box>
             {/* Row 2: จังหวัด / ตำบล/แขวง / อำเภอ/เขต — 3 columns */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, px: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, p: 2, borderBottom: "1px solid #e5e7eb" }}>
               <InfoField label="จังหวัด" value={patient.patient_changwat} />
               <InfoField label="ตำบล/แขวง" value={patient.patient_tambon} />
               <InfoField label="อำเภอ/เขต" value={patient.patient_amphur} />
             </Box>
-            {/* Row 3: รหัสไปรษณีย์ / เบอร์โทรศัพท์ — 3 columns */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, p: 2 }}>
+            {/* Row 3: รหัสไปรษณีย์ / เบอร์โทรศัพท์ — 2 columns */}
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, p: 2 }}>
               <InfoField label="รหัสไปรษณีย์" value={patient.patient_zip_code} />
               <InfoField label="เบอร์โทรศัพท์" value={patient.patient_mobile_phone} />
-              <Box />
             </Box>
           </Box>
         )}
@@ -581,7 +606,7 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
           onClick={() => setShowEmergency(!showEmergency)}
           sx={{ borderBottom: "1px solid #CBD5E1", display: "flex", alignItems: "center", justifyContent: "space-between", p: 2, cursor: "pointer" }}
         >
-          <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245", textDecoration: "underline" }}>
+          <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>
             ติดต่อในกรณีฉุกเฉิน
           </Typography>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transition: "transform 0.2s", transform: showEmergency ? "rotate(180deg)" : "rotate(0deg)" }}>
@@ -589,10 +614,12 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
           </svg>
         </Box>
         {showEmergency && (
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, p: 2 }}>
-            <InfoField label="ชื่อ-นามสกุล" value={patient.patient_contact_full_name || doc.emergencyContactFullName} />
-            <InfoField label="หมายเลขโทรศัพท์" value={patient.patient_contact_mobile_phone || doc.emergencyContactTel} />
-            <InfoField label="เกี่ยวข้องเป็น" value={patient.patient_contact_relation || doc.emergencyContactRelated} />
+          <Box sx={{ mt: 1 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, p: 2, borderBottom: "1px solid #e5e7eb" }}>
+              <InfoField label="ชื่อ-นามสกุล" value={patient.patient_contact_full_name || doc.emergencyContactFullName} />
+              <InfoField label="หมายเลขโทรศัพท์" value={patient.patient_contact_mobile_phone || doc.emergencyContactTel} />
+              <InfoField label="เกี่ยวข้องเป็น" value={patient.patient_contact_relation || doc.emergencyContactRelated} />
+            </Box>
           </Box>
         )}
       </Box>
@@ -615,12 +642,14 @@ function CancelReferralModal({
   deliveryPeriod?: any;
 }) {
   const { findStatusDetail } = useReferralStore();
+  const profile = useAuthStore((s) => s.profile);
+  const optionHospital = useAuthStore((s) => s.optionHospital);
   const [reason, setReason] = useState<number | "">("");
   const [detail, setDetail] = useState("");
   const [errors, setErrors] = useState<{ reason?: string; detail?: string }>({});
   const [reasonOptions, setReasonOptions] = useState<{ value: number; name: string }[]>([]);
 
-  // Fetch cancel reason options when modal opens — matches Nuxt fetchReferralStatusDetail
+  // Fetch cancel reason options when modal opens — matches Nuxt modalSubmitPatient.vue
   useEffect(() => {
     if (!open) return;
     setReason("");
@@ -639,6 +668,17 @@ function CancelReferralModal({
         else if (kindName === "IPD" || kindName === "ผู้ป่วยใน") params.isIpd = true;
         else if (kindName === "EMERGENCY" || kindName === "ฉุกเฉิน") params.isEr = true;
 
+        // Pass hospital param from auth profile — matches Nuxt buildParams + paramOpiton.hospital
+        const roleName = profile?.permissionGroup?.role?.name;
+        const hospitalId = (profile?.permissionGroup as any)?.hospital?.id
+          || profile?.hospital?.id;
+        if (roleName === "superAdmin") {
+          const h = hospitalId ?? optionHospital;
+          if (h) params.hospital = Number(h);
+        } else if (roleName === "superAdminHospital" || roleName === "superAdminZone") {
+          if (hospitalId) params.hospital = Number(hospitalId);
+        }
+
         const res = await findStatusDetail(params);
         const items = res?.referralStatusDetails || res || [];
         setReasonOptions(
@@ -651,7 +691,7 @@ function CancelReferralModal({
       }
     };
     fetchOptions();
-  }, [open, deliveryPeriod, findStatusDetail]);
+  }, [open, deliveryPeriod, findStatusDetail, profile, optionHospital]);
 
   const validate = (): boolean => {
     const newErrors: { reason?: string; detail?: string } = {};
@@ -816,7 +856,11 @@ function CancelReferralModal({
 function RequestReferOutDetailPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const id = searchParams.get("id");
+  // Detect if we are on /refer-out/in (uses referral-info / referral-info-ipd)
+  // vs /request-refer-out/in (uses referral-request-info)
+  const isReferOutRoute = pathname?.startsWith("/refer-out");
 
   const { findOneReferral, findGroupCase, updateReferral, getPatientHistory } = useReferralStore();
   const { uploadFile } = useHospitalStore();
@@ -826,6 +870,7 @@ function RequestReferOutDetailPageInner() {
   const [groupDocs, setGroupDocs] = useState<any[]>([]);
   const [lifeStatusModalOpen, setLifeStatusModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [viewHospitalsModalOpen, setViewHospitalsModalOpen] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
@@ -992,7 +1037,7 @@ function RequestReferOutDetailPageInner() {
   const vaccines = Array.isArray(healthData.vaccines) ? healthData.vaccines : [];
   const vaccinesCovid = Array.isArray(healthData.vaccinesCovid) ? healthData.vaccinesCovid : [];
   const drugs = Array.isArray(healthData.drugs) ? healthData.drugs : [];
-  const personalDisease = patient.patient_personal_disease || healthData.patient_personal_disease || "";
+  const personalDisease = healthData.physicalExam || patient.patient_personal_disease || healthData.patient_personal_disease || "";
 
   // Documents — convert API referralFiles to DocumentItem format for shared component
   const referralFiles = (doc.referralFiles || []).filter((f: any) => !f.isDelete);
@@ -1035,21 +1080,63 @@ function RequestReferOutDetailPageInner() {
   // Delivery periods
   const deliveryPeriods = Array.isArray(doc.deliveryPeriod) ? doc.deliveryPeriod : [];
 
-  // Sorted group case with order (Nuxt: reverse)
-  const sortedGroupDocs = groupDocs.map((item: any, idx: number) => ({
-    ...item,
-    order: groupDocs.length - idx,
-    index: idx,
-  }));
+  // Sorted group case with order (Nuxt: sortedReferGroupCaseWithOrder)
+  // For IPD/EMERGENCY: show only the current record (matches Nuxt lines 170-192)
+  const sortedGroupDocs = (() => {
+    const kindName = doc.referralKind?.name || "";
+    if (kindName === "IPD" || kindName === "EMERGENCY") {
+      const currentIndex = groupDocs.findIndex((item: any) => item.id === doc.id);
+      if (currentIndex >= 0) {
+        return [{
+          ...groupDocs[currentIndex],
+          order: groupDocs.length - currentIndex,
+          index: currentIndex,
+        }];
+      }
+      return [];
+    }
+    return groupDocs.map((item: any, idx: number) => ({
+      ...item,
+      order: groupDocs.length - idx,
+      index: idx,
+    }));
+  })();
 
-  // Check if cancel button should show
-  const shouldShowCancel = statusName &&
+  // shouldShowButtons — matches Nuxt: route id === current doc id
+  const shouldShowButtons = String(id) === String(doc.id);
+
+  // Check if cancel button should show — matches Nuxt refer-out/in conditions
+  const shouldShowCancel = shouldShowButtons &&
+    statusName &&
     statusName !== "ยกเลิก" &&
     statusName !== "รับเข้ารักษา" &&
     statusName !== "สิ้นสุดการส่งตัว" &&
     statusName !== "ปฏิเสธการตอบรับ" &&
-    sortedGroupDocs.length > 0 &&
-    doc.id === sortedGroupDocs[0]?.id;
+    statusName !== "เปลี่ยนแปลงนัดหมาย" &&
+    statusName !== "ยืนยันนัดหมาย";
+
+  // Check if "ดูรายการสถานพยาบาลที่ส่งไป" button should show — only on /refer-out, not OPD
+  const shouldShowViewHospitals = isReferOutRoute &&
+    shouldShowButtons &&
+    statusName !== "ยกเลิก" &&
+    statusName !== "รับเข้ารักษา" &&
+    statusName !== "สิ้นสุดการส่งตัว" &&
+    statusName !== "เปลี่ยนแปลงนัดหมาย" &&
+    statusName !== "ยืนยันนัดหมาย" &&
+    referralKindText !== "OPD";
+
+  // Build hospital list matching Nuxt modalCheckReferToHospital.vue data
+  const viewHospitals = groupDocs
+    .map((item: any) => ({
+      id: item.toHospital?.id || item.id,
+      name: item.toHospital?.name || "",
+      image: item.toHospital?.image || item.toHospital?.logo || "",
+      phone: item.toHospital?.phone || item.toHospital?.telephone || "",
+      referralStatus: item.referralStatus?.name || "",
+      referralStatusDetailCurrent: item.referralStatusDetailCurrent?.name || "",
+      detail: item?.referralStatusDetailCurrentText || "",
+    }))
+    .filter((h: any) => h.name);
 
   // Check if print button should show — matches Nuxt: status exists, not "รอตอบรับ", is latest in group
   const shouldShowPrint = statusName &&
@@ -1104,6 +1191,67 @@ function RequestReferOutDetailPageInner() {
         deliveryPeriod={doc}
       />
 
+      {/* ── View Selected Hospitals Modal (refer-out only) — matches Nuxt modalCheckReferToHospital.vue ── */}
+      <Dialog
+        open={viewHospitalsModalOpen}
+        onClose={() => setViewHospitalsModalOpen(false)}
+        maxWidth={false}
+        PaperProps={{ sx: { borderRadius: "0.5rem", overflow: "hidden", width: 890, maxWidth: "95vw" } }}
+      >
+        <Box sx={{ bgcolor: "#3b82f6", px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: "1.1rem" }}>รายการสถานพยาบาลที่ส่งไป</Typography>
+          <IconButton onClick={() => setViewHospitalsModalOpen(false)} sx={{ color: "#fff" }}><CloseIcon /></IconButton>
+        </Box>
+        <DialogContent sx={{ p: 3 }}>
+          {viewHospitals.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ py: 4, textAlign: "center" }}>ไม่มีข้อมูลสถานพยาบาลที่เลือก</Typography>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "#036245", "& th": { color: "#fff", fontWeight: 600, fontSize: "0.85rem", textAlign: "center", py: 1.5 } }}>
+                    <TableCell>ลำดับ</TableCell>
+                    <TableCell>รูปภาพ</TableCell>
+                    <TableCell sx={{ textAlign: "left" }}>ชื่อสถานพยาบาล</TableCell>
+                    <TableCell>สถานะ</TableCell>
+                    <TableCell>เหตุผลการปฏิเสธ</TableCell>
+                    <TableCell>รายละเอียดเพิ่มเติม</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {viewHospitals.filter((h: any) => h.name || h.phone || h.image).map((h: any, i: number) => {
+                    const badgeColors = getCountBadgeClasses(h.referralStatus || "");
+                    return (
+                      <TableRow key={h.id} sx={{ borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f9fafb" } }}>
+                        <TableCell sx={{ width: 60, textAlign: "center" }}>{i + 1}</TableCell>
+                        <TableCell sx={{ width: 60, textAlign: "center" }}>
+                          <Box component="img" src={h.image || "/images/Image_Avatar.png"} alt={h.name} sx={{ width: 40, height: 40, borderRadius: "50%", mx: "auto", objectFit: "cover" }} />
+                        </TableCell>
+                        <TableCell>
+                          <Typography sx={{ fontWeight: 500, fontSize: "0.95rem" }}>{h.name}</Typography>
+                          {h.phone && (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                              <Typography sx={{ fontSize: "0.75rem", color: "#6b7280" }}>📞 {h.phone}</Typography>
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "center" }}>
+                          {h.referralStatus ? (
+                            <Chip label={h.referralStatus} size="small" sx={{ bgcolor: badgeColors.bgcolor, color: badgeColors.color, fontWeight: 500, fontSize: "0.75rem" }} />
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "center", fontWeight: 500 }}>{h.referralStatusDetailCurrent || "-"}</TableCell>
+                        <TableCell sx={{ textAlign: "center", fontWeight: 500 }}>{h.detail || "-"}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* ── Header row ── */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: "24px" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -1125,30 +1273,62 @@ function RequestReferOutDetailPageInner() {
             ข้อมูลใบส่งตัวผู้ป่วย
           </Typography>
         </Box>
-        {shouldShowCancel && (
-          <Button
-            variant="contained"
-            onClick={() => setCancelModalOpen(true)}
-            startIcon={<CloseIcon sx={{ fontSize: "22px !important" }} />}
-            sx={{
-              bgcolor: "#F25555",
-              "&:hover": { bgcolor: "#FF808E" },
-              "&:active": { bgcolor: "#DC4040" },
-              textTransform: "none",
-              fontWeight: 400,
-              fontSize: "16px",
-              fontFamily: "Poppins, sans-serif",
-              color: "#FAFAF9",
-              borderRadius: "4px",
-              px: "16px",
-              py: "8px",
-              minHeight: "40px",
-              boxShadow: "none",
-            }}
-          >
-            ยกเลิกการส่งตัวผู้ป่วย
-          </Button>
-        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* ดูรายการสถานพยาบาลที่ส่งไป — only on /refer-out, not OPD */}
+          {shouldShowViewHospitals && (
+            <Button
+              variant="contained"
+              onClick={() => setViewHospitalsModalOpen(true)}
+              startIcon={
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z" />
+                </svg>
+              }
+              sx={{
+                bgcolor: "#3b82f6",
+                "&:hover": { bgcolor: "#091b63" },
+                "&:active": { bgcolor: "#0735ed" },
+                textTransform: "none",
+                fontWeight: 400,
+                fontSize: "16px",
+                fontFamily: "Sarabun, sans-serif",
+                color: "#fff",
+                borderRadius: "4px",
+                px: "16px",
+                py: "8px",
+                minHeight: "40px",
+                boxShadow: "none",
+                border: "none",
+              }}
+            >
+              ดูรายการสถานพยาบาลที่ส่งไป
+            </Button>
+          )}
+          {shouldShowCancel && (
+            <Button
+              variant="contained"
+              onClick={() => setCancelModalOpen(true)}
+              startIcon={<CloseIcon sx={{ fontSize: "22px !important" }} />}
+              sx={{
+                bgcolor: "#F25555",
+                "&:hover": { bgcolor: "#FF808E" },
+                "&:active": { bgcolor: "#DC4040" },
+                textTransform: "none",
+                fontWeight: 400,
+                fontSize: "16px",
+                fontFamily: "Sarabun, sans-serif",
+                color: "#FAFAF9",
+                borderRadius: "4px",
+                px: "16px",
+                py: "8px",
+                minHeight: "40px",
+                boxShadow: "none",
+              }}
+            >
+              ยกเลิกการส่งตัวผู้ป่วย
+            </Button>
+          )}
+        </Box>
       </Box>
 
       {/* ── Group Case Cards ── */}
@@ -1192,10 +1372,20 @@ function RequestReferOutDetailPageInner() {
                   />
                 </Box>
                 <Typography sx={{ fontSize: "1rem", mb: "4px" }}>
-                  <b>จาก :</b>{" "}<span style={{ fontWeight: 400 }}>{gDoc.toHospital?.name || "-"}</span>
+                  <b>จาก :</b>{" "}<span style={{ fontWeight: 400 }}>{gDoc.fromHospital?.name || "-"}</span>
                 </Typography>
                 <Typography sx={{ fontSize: "1rem" }}>
-                  <b>ไปยัง :</b>{" "}<span style={{ fontWeight: 400 }}>{gDoc.fromHospital?.name || "-"}</span>
+                  <b>ไปยัง :</b>{" "}
+                  <span style={{
+                    fontWeight: 400,
+                    ...((doc.referralKind?.name === "IPD" || doc.referralKind?.name === "EMERGENCY") && !gDoc.toHospital
+                      ? { color: "#EAB308" }
+                      : {}),
+                  }}>
+                    {(doc.referralKind?.name === "IPD" || doc.referralKind?.name === "EMERGENCY") && !gDoc.toHospital
+                      ? "รอตอบรับ"
+                      : gDoc.toHospital?.name || "-"}
+                  </span>
                 </Typography>
               </Box>
             );
@@ -1205,31 +1395,36 @@ function RequestReferOutDetailPageInner() {
 
       {/* ── Main panel (white bg) ── */}
       <Paper sx={{ borderRadius: "8px", overflow: "hidden", mb: 3, bgcolor: "#fff", p: "16px" }}>
-        {/* Status life + History buttons */}
+        {/* No. + Status life + History buttons */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: "12px" }}>
-          <Box
-            onClick={() => setLifeStatusModalOpen(true)}
-            sx={{
-              bgcolor: getStatusBgColor(lifeStatus),
-              color: "#fff",
-              borderRadius: "9999px",
-              px: "16px",
-              py: "8px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              cursor: "pointer",
-              userSelect: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)",
-              transition: "box-shadow 0.15s, transform 0.15s",
-              "&:hover": { boxShadow: "0 3px 6px rgba(0,0,0,0.16)" },
-              "&:active": { transform: "scale(0.95)" },
-            }}
-          >
-            <Typography sx={{ fontSize: "1rem" }}>
-              {lifeStatus}
+          <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Typography sx={{ fontSize: "1.5rem", fontWeight: 600, color: "#036245", lineHeight: "32px", fontFamily: "Sarabun, sans-serif", mr: "8px" }}>
+              {`No .${doc.runNumber || ""}`}
             </Typography>
-            <EpEditIcon size={22} color="#fff" />
+            <Box
+              onClick={() => setLifeStatusModalOpen(true)}
+              sx={{
+                bgcolor: getStatusBgColor(lifeStatus),
+                color: "#fff",
+                borderRadius: "9999px",
+                px: "16px",
+                py: "8px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                userSelect: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)",
+                transition: "box-shadow 0.15s, transform 0.15s",
+                "&:hover": { boxShadow: "0 3px 6px rgba(0,0,0,0.16)" },
+                "&:active": { transform: "scale(0.95)" },
+              }}
+            >
+              <Typography sx={{ fontSize: "1rem" }}>
+                {lifeStatus}
+              </Typography>
+              <EpEditIcon size={22} color="#fff" />
+            </Box>
           </Box>
           <Box sx={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <Button
@@ -1313,82 +1508,180 @@ function RequestReferOutDetailPageInner() {
                 }
               />
               <Box sx={{ p: 2 }}>
-                {/* Delivery period */}
+                {/* Delivery period — ข้อมูลวันและเวลา (matches Nuxt referral-info-ipd.vue) */}
                 {deliveryPeriods.length > 0 && (
                   <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1, mb: 2 }}>
                     <Box sx={{ borderBottom: "1px solid #E5E7EB", px: 2, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>ระยะเวลารับรองสิทธิ์</Typography>
+                      <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ข้อมูลวันและเวลา</Typography>
                     </Box>
                     <Box sx={{ p: 2 }}>
-                      {doc.referralDeliveryPeriod?.name && (
-                        <Typography sx={{ fontWeight: 700, mb: 1 }}>{doc.referralDeliveryPeriod.name}</Typography>
-                      )}
                       {deliveryPeriods.map((period: any, idx: number) => (
-                        <Box key={idx} sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, mb: 1 }}>
-                          <Box>
-                            <Typography sx={{ fontSize: "0.8rem", color: "#6b7280" }}>วันที่เริ่มต้น</Typography>
-                            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>{fmtDateOnly(period.startDelivery)}</Typography>
+                        <Box key={idx}>
+                          {doc.referralDeliveryPeriod?.name && (
+                            <Typography sx={{ fontWeight: 700, mb: 1, p: "8px" }}>{doc.referralDeliveryPeriod.name}</Typography>
+                          )}
+                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                            <Box>
+                              <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>วันที่เริ่มต้น</Typography>
+                              <Typography sx={{
+                                fontWeight: 700, fontSize: "0.95rem",
+                                bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
+                                borderRadius: "4px 0 0 4px", p: "12px",
+                              }}>
+                                {fmtDateThaiDirect(period.endDelivery)}
+                              </Typography>
+                            </Box>
+                            <Box>
+                              <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>เวลา</Typography>
+                              <Typography sx={{
+                                fontWeight: 700, fontSize: "0.95rem",
+                                bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
+                                borderRadius: "4px 0 0 4px", p: "12px",
+                              }}>
+                                {fmtTimeDirect(period.endDelivery)}
+                              </Typography>
+                            </Box>
                           </Box>
-                          <Box>
-                            <Typography sx={{ fontSize: "0.8rem", color: "#6b7280" }}>เวลา</Typography>
-                            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>{period.startDelivery ? fmtDate(period.startDelivery).split(" ").pop() : "-"}</Typography>
-                          </Box>
-                          <Box>
-                            <Typography sx={{ fontSize: "0.8rem", color: "#6b7280" }}>วันหมดอายุ</Typography>
-                            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>{fmtDateOnly(period.endDelivery)}</Typography>
-                          </Box>
-                          <Box>
-                            <Typography sx={{ fontSize: "0.8rem", color: "#6b7280" }}>เวลา</Typography>
-                            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>{period.endDelivery ? fmtDate(period.endDelivery).split(" ").pop() : "-"}</Typography>
-                          </Box>
+                          {/* ตอบรับภายในวันที่ */}
+                          {doc.isEndAccept && (
+                            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 2 }}>
+                              <Box>
+                                <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>ตอบรับภายในวันที่</Typography>
+                                <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>{fmtDateThaiDirect(doc.endAccept)}</Typography>
+                              </Box>
+                              <Box>
+                                <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>เวลา</Typography>
+                                <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                                  {fmtTimeDirect(doc.endAccept)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
                         </Box>
                       ))}
                     </Box>
                   </Box>
                 )}
 
-                {/* ข้อมูลสถานพยาบาล */}
-                <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "6px", p: "16px", mb: "16px" }}>
-                  <Typography sx={{ fontWeight: 700, fontSize: "1.125rem", mb: "12px", color: "#036245" }}>
-                    ข้อมูลสถานพยาบาล
-                  </Typography>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
-                    <InfoField label="สถานพยาบาลต้นทาง" value={originHospitalName} bold />
-                    <InfoField label="ประเภทผู้ป่วยที่ส่งตัว" value={referralKindText} bold />
-                    <InfoField label="จุดรับใบส่งตัว" value={doc.deliveryPointTypeEnd?.name} />
-                    <InfoField label="เบอร์ติดต่อจุดรับใบส่งตัว" value={doc.deliveryPointTypeEnd?.phone} />
-                    <InfoField label="จุดสร้างใบส่งตัว" value={doc.deliveryPointTypeStart?.name} />
-                    <InfoField label="เบอร์ติดต่อจุดสร้างใบส่งตัว" value={doc.deliveryPointTypeStart?.phone} />
+                {/* ข้อมูลสถานพยาบาล — matches Nuxt referral-info-ipd.vue labels */}
+                {(() => {
+                  const isIPDorER = referralKindText === "IPD" || referralKindText === "EMERGENCY";
+                  const isWaiting = statusName === "รอตอบรับ";
+                  // Nuxt labels depend on route path; for refer-out: สถานพยาบาลปลายทาง
+                  const hospLabel = "สถานพยาบาลปลายทาง";
+                  // Nuxt hospitalFrom: for refer-out uses toHospital (DB swap)
+                  const hospValue = doc.toHospital?.name || "-";
+                  // Show "รอตอบรับ" in yellow for IPD/ER when status is รอตอบรับ
+                  const showWaiting = isIPDorER && isWaiting;
+                  // Patient type display
+                  const kindDisplay = referralKindText === "IPD" ? "IPD - ผู้ป่วยใน"
+                    : referralKindText === "EMERGENCY" ? "Emergency - ผู้ป่วยฉุกเฉิน"
+                    : referralKindText;
+                  const kindColor = referralKindText === "IPD" ? "#3B82F6"
+                    : referralKindText === "EMERGENCY" ? "#F97316"
+                    : "#111827";
+
+                  return (
+                    <Box sx={{ mb: "16px" }}>
+                      <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
+                        ข้อมูลสถานพยาบาล
+                      </Typography>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, p: 2 }}>
+                        {/* Left column */}
+                        <Box>
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>{hospLabel}</Typography>
+                          {showWaiting ? (
+                            <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>รอตอบรับ</Typography>
+                          ) : (
+                            <Typography sx={{ ml: 2, fontSize: "1rem" }}>{hospValue}</Typography>
+                          )}
+
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>จุดรับใบส่งตัว</Typography>
+                          {doc.deliveryPointTypeEnd ? (
+                            <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeEnd.name || "-"}</Typography>
+                          ) : (
+                            <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>รอตอบรับ</Typography>
+                          )}
+
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>จุดสร้างใบส่งตัว</Typography>
+                          <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeStart?.name || "-"}</Typography>
+                        </Box>
+
+                        {/* Right column */}
+                        <Box>
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>ประเภทผู้ป่วยที่ส่งตัว</Typography>
+                          <Typography sx={{ ml: 2, fontSize: "1rem", color: kindColor }}>{kindDisplay}</Typography>
+
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>เบอร์ติดต่อจุดรับใบส่งตัว</Typography>
+                          {doc.deliveryPointTypeEnd ? (
+                            <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeEnd.phone || "-"}</Typography>
+                          ) : (
+                            <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>รอตอบรับ</Typography>
+                          )}
+
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>เบอร์ติดต่อจุดสร้างใบส่งตัว</Typography>
+                          <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeStart?.phone || "-"}</Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  );
+                })()}
+
+                {/* ข้อมูลผู้สร้างใบส่งตัว — matches Nuxt referral-info-ipd.vue */}
+                <Box sx={{ mb: 2, mt: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
+                    <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
+                      ข้อมูลผู้สร้างใบส่งตัว
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, p: 2 }}>
+                    {/* Left column */}
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>แพทย์ผู้ที่สั่ง</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.doctorName || "-"}</Typography>
+
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>ภาควิชาแพทย์</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.doctorDepartment || "-"}</Typography>
+                    </Box>
+                    {/* Right column */}
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>รหัสแพทย์</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.doctorIdentifyNumber || "-"}</Typography>
+
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>เบอร์ติดต่อแพทย์</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.doctorPhone || "-"}</Typography>
+                    </Box>
                   </Box>
                 </Box>
 
-                {/* ข้อมูลผู้สั่งใบส่งตัว */}
-                <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "6px", p: "16px", mb: "16px" }}>
-                  <Typography sx={{ fontWeight: 700, fontSize: "1.125rem", mb: "12px", color: "#036245" }}>
-                    ข้อมูลผู้สั่งใบส่งตัว
-                  </Typography>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
-                    <InfoField label="แพทย์ผู้สั่ง" value={doc.doctorName} bold />
-                    <InfoField label="รหัสแพทย์" value={doc.doctorIdentifyNumber || doc.doctorCode} bold />
-                    <InfoField label="ภาควิชาแพทย์" value={doc.doctorDepartment} />
-                    <InfoField label="เบอร์ติดต่อแพทย์" value={doc.doctorPhone} />
+                {/* เหตุผลและการสาเหตุ — matches Nuxt referral-info-ipd.vue */}
+                <Box sx={{ mb: 2, mt: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
+                    <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
+                      เหตุผลและการสาเหตุ
+                    </Typography>
                   </Box>
-                </Box>
-
-                {/* เหตุผลและสาเหตุ */}
-                <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "6px", p: "16px", mb: "16px" }}>
-                  <Typography sx={{ fontWeight: 700, fontSize: "1.125rem", mb: "12px", color: "#036245" }}>
-                    เหตุผลและสาเหตุ
-                  </Typography>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
-                    <InfoField label="เหตุผลการส่งตัว" value={doc.referralStatusDetail?.name || doc.referral_reason} />
-                    <InfoField label="สาเหตุการส่งตัว" value={doc.referralCause?.name} />
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, p: 2 }}>
+                    {/* Left column */}
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>เหตุผลการส่งตัว</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.referralStatusDetail?.name || doc.referral_reason || "-"}</Typography>
+                    </Box>
+                    {/* Right column */}
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>สาเหตุการส่งตัว</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem", fontWeight: 700 }}>{doc.referralCause?.name || "-"}</Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
-                    <InfoField label="หมายเหตุ" value={doc.remark} />
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, p: 2 }}>
+                    {/* หมายเหตุ */}
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>หมายเหตุ</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.remark || "-"}</Typography>
+                    </Box>
                     {/* เหตุผล (สถานะ) — colored by referral status */}
-                    <Box sx={{ mb: "8px" }}>
-                      <Typography sx={{ fontWeight: 500, fontSize: "1.125rem", mb: "4px" }}>
+                    <Box>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>
                         เหตุผล
                         <Typography
                           component="span"
@@ -1397,7 +1690,6 @@ function RequestReferOutDetailPageInner() {
                             fontWeight: 500,
                             fontSize: "1.125rem",
                             color: getStatusTextColor(doc.referralStatus?.name || ""),
-                            fontFamily: "Sarabun, sans-serif",
                           }}
                         >
                           ({doc.referralStatus?.name || "-"})
@@ -1405,10 +1697,9 @@ function RequestReferOutDetailPageInner() {
                       </Typography>
                       <Typography
                         sx={{
-                          ml: "16px",
+                          ml: 2,
                           fontSize: "1rem",
                           color: getStatusTextColor(doc.referralStatus?.name || ""),
-                          fontFamily: "Sarabun, sans-serif",
                         }}
                       >
                         {doc.referralStatusDetailCurrent?.name || "-"}
@@ -1416,11 +1707,14 @@ function RequestReferOutDetailPageInner() {
                     </Box>
                   </Box>
                   {/* รายละเอียด */}
-                  <InfoField label="รายละเอียด" value={doc.referralStatusDetailCurrentText} />
+                  <Box sx={{ p: 2 }}>
+                    <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>รายละเอียด</Typography>
+                    <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.referralStatusDetailCurrentText || "-"}</Typography>
+                  </Box>
 
                   {/* Hospital branches (destinations) */}
                   {doc.referralDocumentHospitals && doc.referralDocumentHospitals.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
+                    <Box sx={{ mt: 1, p: 2 }}>
                       <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, mb: 0.5 }}>รวมรายละเอียด</Typography>
                       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1, border: "1px solid #E5E7EB", borderRadius: 1, p: 1 }}>
                         {doc.referralDocumentHospitals.map((h: any, hi: number) => (
@@ -1434,66 +1728,173 @@ function RequestReferOutDetailPageInner() {
                   )}
                 </Box>
 
-                {/* ระดับความสำคัญ + ข้อมูลเพิ่มเติม — same box style as เหตุผลและสาเหตุ */}
-                <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "6px", p: "16px", mb: "16px" }}>
-                  {/* ระดับความสำคัญ */}
-                  <Box sx={{ borderBottom: "1px solid #E5E7EB", pb: "8px", mb: "16px" }}>
-                    <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
-                      ระดับความสำคัญ
-                    </Typography>
-                  </Box>
-                  <Box sx={{ pl: "8px", mb: "16px" }}>
-                    <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.5 }}>
-                      ระดับความเฉียบพลัน
-                    </Typography>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "4px" }}>
-                      <Box sx={{
-                        width: 28, height: 28, borderRadius: "50%",
-                        bgcolor: (() => {
-                          const id = doc.acuteLevel?.id;
-                          if (id === 1) return "#EF4444";
-                          if (id === 2) return "#F97316";
-                          if (id === 3) return "#EAB308";
-                          if (id === 4) return "#3B82F6";
-                          if (id === 5) return "#22C55E";
-                          return "#22C55E";
-                        })(),
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontWeight: 700, fontSize: "0.875rem",
-                      }}>
-                        H
-                      </Box>
-                      <Typography sx={{ fontSize: "1rem", color: "#111827" }}>
-                        {(() => {
-                          const id = doc.acuteLevel?.id;
-                          if (id === 1) return "Unstable";
-                          if (id === 2) return "Stable with High risk of deterioration";
-                          if (id === 3) return "Stable with Medium risk of deterioration";
-                          if (id === 4) return "Stable with Low risk of deterioration";
-                          if (id === 5) return "Stable with No risk of deterioration";
-                          return "-";
-                        })()}
-                      </Typography>
-                    </Box>
-                  </Box>
+                {/* ระดับความสำคัญ — conditional based on route + referralKind
+                  * /request-refer-out → referral-request-info.vue: English text, "H" badge, "ระดับความเฉียบพลัน", no ICU
+                  * /refer-out + OPD → referral-info.vue: Thai text, shortName badge, "ระดับความเฉียบพลัน", no ICU
+                  * /refer-out + IPD/EMERGENCY → referral-info-ipd.vue: Thai text, shortName badge, "ความเฉียบพลัน", ICU, ใช้รถ/ใช้พยาบาล
+                */}
+                {(() => {
+                  const kindName = referralKindText;
+                  const isIPDorER = isReferOutRoute && (kindName === "IPD" || kindName === "EMERGENCY");
+                  // referral-request-info uses English + hardcoded "H"
+                  // referral-info / referral-info-ipd use Thai + shortName
+                  const useEnglish = !isReferOutRoute;
+                  const badgeLetter = useEnglish ? "H" : (doc.acuteLevel?.shortName || "-");
+                  const acuteLabel = isIPDorER ? "ความเฉียบพลัน" : "ระดับความเฉียบพลัน";
 
-                  {/* ข้อมูลเพิ่มเติม */}
-                  <Box sx={{ borderBottom: "1px solid #E5E7EB", pb: "8px", mb: "16px" }}>
+                  const getAcuteTextEn = (id: number) => {
+                    if (id === 1) return "Unstable";
+                    if (id === 2) return "Stable with High risk of deterioration";
+                    if (id === 3) return "Stable with Medium risk of deterioration";
+                    if (id === 4) return "Stable with Low risk of deterioration";
+                    if (id === 5) return "Stable with No risk of deterioration";
+                    return "-";
+                  };
+                  const getAcuteTextTh = (id: number) => {
+                    if (id === 1) return "ผู้ป่วยไร้เสถียรภาพ";
+                    if (id === 2) return "ผู้ป่วยมีเสถียรภาพ มีความเสี่ยงต่อการทรุดลงเฉียบพลันสูง";
+                    if (id === 3) return "ผู้ป่วยมีเสถียรภาพ มีความเสี่ยงต่อการทรุดลงเฉียบพลันปาน";
+                    if (id === 4) return "ผู้ป่วยมีเสถียรภาพ มีความเสี่ยงต่อการทรุดลงเฉียบพลันต่ำ";
+                    if (id === 5) return "ผู้ป่วยมีเสถียรภาพ ไม่มีความเสี่ยงต่อการทรุดลงเฉียบพลัน";
+                    return "-";
+                  };
+                  const acuteText = useEnglish
+                    ? getAcuteTextEn(doc.acuteLevel?.id)
+                    : getAcuteTextTh(doc.acuteLevel?.id);
+
+                  return (
+                    <Box sx={{ mb: 2, mt: 2 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
+                        <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
+                          ระดับความสำคัญ
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "grid", gridTemplateColumns: isIPDorER ? "1fr 1fr" : "1fr", gap: 4, alignItems: "start", p: 2 }}>
+                        {/* ความเฉียบพลัน */}
+                        <Box sx={{ p: 2 }}>
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: 1 }}>
+                            {acuteLabel}
+                          </Typography>
+                          <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, ml: 1 }}>
+                            <Box sx={{
+                              minWidth: 28, width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                              bgcolor: (() => {
+                                const id = doc.acuteLevel?.id;
+                                if (id === 1) return "#EF4444";
+                                if (id === 2) return "#F97316";
+                                if (id === 3) return "#EAB308";
+                                if (id === 4) return "#3B82F6";
+                                if (id === 5) return "#22C55E";
+                                return "#22C55E";
+                              })(),
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              color: "#fff", fontWeight: 700, fontSize: "0.875rem",
+                            }}>
+                              {badgeLetter}
+                            </Box>
+                            <Typography component="span" sx={{ fontSize: "1.125rem", fontWeight: 500 }}>
+                              {acuteText}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        {/* ระดับคนไข้ ICU — only for IPD/EMERGENCY on /refer-out */}
+                        {isIPDorER && doc.icuLevel && (
+                          <Box sx={{ p: 2 }}>
+                            <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: 1 }}>ระดับคนไข้ ICU</Typography>
+                            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, ml: 1 }}>
+                              <Box sx={{
+                                minWidth: 36, width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                                bgcolor: (() => {
+                                  const id = doc.icuLevel?.id;
+                                  if (id === 1) return "#EF4444";
+                                  if (id === 2) return "#F97316";
+                                  if (id === 3) return "#EAB308";
+                                  if (id === 4) return "#22C55E";
+                                  if (id === 5) return "#3B82F6";
+                                  return "#22C55E";
+                                })(),
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                color: "#fff", fontWeight: 700, fontSize: "0.75rem",
+                              }}>
+                                ICU
+                              </Box>
+                              <Typography component="span" sx={{ fontSize: "1.125rem", fontWeight: 500 }}>
+                                {(() => {
+                                  const id = doc.icuLevel?.id;
+                                  if (id === 1) return "ผู้ป่วยวิกฤต (Piority 1)";
+                                  if (id === 2) return "ผู้ป่วยที่ต้องเฝ้าระวังอย่างใกล้ชิด (Piority 2)";
+                                  if (id === 3) return "ผู้ป่วยโรครุนแรงที่มีโอกาสฟื้นตัวต่ำ (Piority 3)";
+                                  if (id === 4) return "ผู้ป่วยที่ไม่จำเป็นต้องอยู่ใน (Piority 4)";
+                                  if (id === 5) return "ผู้ป่วยมีเสถียรภาพ ไม่มีความเสี่ยงต่อการทรุดลงเฉียบพลัน";
+                                  return "-";
+                                })()}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })()}
+
+                {/* ข้อมูลเพิ่มเติม — conditional fields based on route + referralKind */}
+                <Box sx={{ mb: 2, mt: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
                       ข้อมูลเพิ่มเติม
                     </Typography>
                   </Box>
-                  <Box sx={{ pl: "8px" }}>
-                    <Box sx={{ mb: "8px" }}>
-                      <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.5 }}>คนไข้เป็นโรคติดต่อ</Typography>
-                      <Typography sx={{ fontSize: "1rem", color: "#111827", lineHeight: 1.5 }}>{doc.contagious ? "ใช่" : "ไม่"}</Typography>
+                  <Box sx={{ p: 2 }}>
+                    <Box sx={{ mb: 1 }}>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>คนไข้เป็นโรคติดต่อ</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.contagious ? "ใช่" : "ไม่"}</Typography>
                     </Box>
-                    <Box sx={{ mb: "8px" }}>
-                      <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.5 }}>ความเห็นเพิ่มเติม</Typography>
-                      <Typography sx={{ fontSize: "1rem", color: "#111827", lineHeight: 1.5 }}>{doc.moreDetail || "-"}</Typography>
+                    {/* ใช้รถส่งตัว + ใช้พยาบาล — only for IPD/EMERGENCY on /refer-out */}
+                    {isReferOutRoute && (referralKindText === "IPD" || referralKindText === "EMERGENCY") && (
+                      <>
+                        <Box sx={{ mb: 1, mt: 2 }}>
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>ใช้รถส่งตัว</Typography>
+                          <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.carRefer ? "ต้องการใช้" : "ไม่ต้องการใช้"}</Typography>
+                        </Box>
+                        <Box sx={{ mb: 1, mt: 2 }}>
+                          <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>ใช้พยาบาลที่จุดรับส่ง</Typography>
+                          <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.useNurse ? "ใช้" : "ไม่ได้ใช้"}</Typography>
+                        </Box>
+                      </>
+                    )}
+                    <Box sx={{ mt: 2 }}>
+                      <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>ความเห็นเพิ่มเติม</Typography>
+                      <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.moreDetail || "-"}</Typography>
                     </Box>
                   </Box>
                 </Box>
+
+                {/* อุปกรณ์ที่จำเป็น — shown on /refer-out only (commented out in referral-request-info.vue) */}
+                {isReferOutRoute && (
+                  <Box sx={{ mb: 2, mt: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
+                      <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
+                        อุปกรณ์ที่จำเป็น
+                      </Typography>
+                    </Box>
+                    {doc.equipment && Array.isArray(doc.equipment) && doc.equipment.length > 0 ? (
+                      <Box sx={{ p: 2 }}>
+                        <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mb: "4px" }}>ชื่ออุปกรณ์</Typography>
+                        <Box component="ol" sx={{ ml: "0.3in", listStyleType: "decimal", fontSize: "1rem" }}>
+                          {doc.equipment.map((item: any, idx: number) => (
+                            <Box component="li" key={idx} sx={{ mb: 1 }}>
+                              {item || "-"}
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box sx={{ p: 2 }}>
+                        <Typography sx={{ fontSize: "1.125rem", fontWeight: 500 }}>ไม่มีอุปกรณ์</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </Box>
             </Box>
           </Box>
@@ -1504,94 +1905,99 @@ function RequestReferOutDetailPageInner() {
           </Box>
         </Box>
 
-        {/* ── ข้อมูลสุขภาพประจำตัวผู้ป่วย ── */}
+        {/* ── ข้อมูลสุขภาพประจำตัวผู้ป่วย — matches Nuxt health-info.vue ── */}
         <Box sx={{ mt: "24px" }}>
           <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "8px", overflow: "hidden" }}>
             <SectionHeader title="ข้อมูลสุขภาพประจำตัวผู้ป่วย" />
+
+            {/* ประวัติโรค — green text with border-bottom separator */}
+            <Box sx={{ borderBottom: "1px solid #CBD5E1", p: 2 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ประวัติโรค</Typography>
+            </Box>
+
+            {/* ประวัติการป่วยในอดีตและประวัติครอบครัว */}
+            <Box>
+              <Typography sx={{ fontSize: "1rem", fontWeight: 500, p: 2, mb: "4px" }}>
+                ประวัติการป่วยในอดีตและประวัติครอบครัว
+              </Typography>
+              <Typography sx={{ px: 3, pb: 2, fontSize: "1rem" }}>
+                {personalDisease || "-"}
+              </Typography>
+            </Box>
+
             <Box sx={{ p: 2 }}>
-              {/* ประวัติโรค */}
-              <Typography sx={{ fontWeight: 700, fontSize: "1.125rem", mb: "8px", textDecoration: "underline" }}>ประวัติโรค</Typography>
-              <InfoField label="ประวัติการป่วยในอดีตและประวัติครอบครัว" value={personalDisease} />
-
-              <Typography sx={{ fontWeight: 600, mt: 1, mb: 0.5 }}>โรคประจำตัว</Typography>
+              {/* โรคประจำตัว */}
+              <Typography sx={{ fontSize: "1rem", fontWeight: 500, mb: "4px" }}>โรคประจำตัว</Typography>
               {diseases.length > 0 ? (
-                <Box sx={{ mb: 1 }}>
+                <Box component="ol" sx={{ ml: 2, pl: 2, listStyleType: "decimal", fontSize: "1rem", mb: 2 }}>
                   {diseases.map((d: any, i: number) => (
-                    <Typography key={i} sx={{ fontSize: "0.9rem" }}>
-                      {i + 1}. {typeof d === "string" ? d : d.name || "-"}
-                    </Typography>
+                    <Box component="li" key={i} sx={{ mb: 0.5 }}>
+                      {typeof d === "string" ? d : d.name || "-"}
+                    </Box>
                   ))}
                 </Box>
               ) : (
-                <Typography sx={{ fontSize: "0.9rem", color: "#9ca3af", mb: 1 }}>-</Typography>
+                <Typography sx={{ fontSize: "1rem", mb: 2 }}>-</Typography>
               )}
 
-              <Typography sx={{ fontWeight: 600, mt: 1, mb: 0.5 }}>ประวัติการแพ้</Typography>
+              {/* ประวัติการแพ้ */}
+              <Typography sx={{ fontSize: "1rem", fontWeight: 600, mb: 1, mt: 2 }}>ประวัติการแพ้</Typography>
               {drugAllergy.length > 0 ? (
-                <Box sx={{ mb: 1 }}>
+                <Box component="ol" sx={{ ml: 2, pl: 2, listStyleType: "decimal", fontSize: "1rem", mb: 2 }}>
                   {drugAllergy.map((d: any, i: number) => (
-                    <Typography key={i} sx={{ fontSize: "0.9rem" }}>
-                      {i + 1}. {typeof d === "string" ? d : d.name || "-"}
-                    </Typography>
+                    <Box component="li" key={i} sx={{ mb: 1 }}>
+                      {typeof d === "string" ? d : d.name || "-"}
+                    </Box>
                   ))}
                 </Box>
               ) : (
-                <Typography sx={{ fontSize: "0.9rem", color: "#9ca3af", mb: 1 }}>-</Typography>
+                <Typography sx={{ fontSize: "1rem", mb: 2 }}>-</Typography>
               )}
 
-              {/* ข้อมูลวัคซีน */}
-              <Typography sx={{ fontWeight: 700, fontSize: "0.95rem", mt: 2, mb: 1, textDecoration: "underline" }}>ข้อมูลวัคซีน</Typography>
-              {vaccines.length > 0 ? (
-                <TableContainer sx={{ mb: 2 }}>
-                  <Table size="small" sx={{ border: "1px solid #E5E7EB" }}>
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>วัคซีนล่าสุด</TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>วันที่ฉีด</TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>สถานที่ฉีด</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {vaccines.map((v: any, i: number) => (
-                        <TableRow key={i}>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.vaccineName || v.name || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.date || fmtDateOnly(v.vaccineDate) || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.place || v.vaccinePlace || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Typography sx={{ fontSize: "0.9rem", color: "#9ca3af", mb: 2 }}>-</Typography>
-              )}
+              {/* ข้อมูลวัคซีน — green text with border-bottom separator */}
+              <Box sx={{ borderBottom: "1px solid #CBD5E1", p: 2, mt: 2 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ข้อมูลวัคซีน</Typography>
+              </Box>
 
-              {/* วัคซีนโควิด */}
-              <Typography sx={{ fontWeight: 600, mb: 1 }}>วัคซีนโควิด</Typography>
-              {vaccinesCovid.length > 0 ? (
-                <TableContainer sx={{ mb: 1 }}>
-                  <Table size="small" sx={{ border: "1px solid #E5E7EB" }}>
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>วัคซีนล่าสุด</TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>วันที่ฉีด</TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: "0.875rem" }}>สถานที่ฉีด</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {vaccinesCovid.map((v: any, i: number) => (
-                        <TableRow key={i}>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.vaccineName || v.name || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.date || fmtDateOnly(v.vaccineDate) || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: "0.875rem" }}>{v.place || v.vaccinePlace || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Typography sx={{ fontSize: "0.9rem", color: "#9ca3af" }}>-</Typography>
-              )}
+              {/* วัคซีนล่าสุด — grid layout matching Nuxt */}
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1, mb: 1 }}>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วัคซีนล่าสุด</Typography>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วันที่ได้รับ</Typography>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>สถานที่รับ</Typography>
+                  <Box />
+                </Box>
+                {vaccines.length > 0 ? vaccines.map((v: any, i: number) => (
+                  <Box key={i} sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1.5, borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f9fafb" } }}>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#1f2937" }}>{v.vaccineName || v.name || "-"}</Typography>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#4b5563" }}>{fmtDateThaiDirect(v.date || v.vaccineDate) || "-"}</Typography>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#4b5563" }}>{v.location || v.place || v.vaccinePlace || "-"}</Typography>
+                    <Box />
+                  </Box>
+                )) : (
+                  <Typography sx={{ px: 1.5, py: 1, fontSize: "0.875rem" }}>-</Typography>
+                )}
+              </Box>
+
+              {/* วัคซีนโควิด — grid layout matching Nuxt */}
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1, mb: 1 }}>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วัคซีนโควิด</Typography>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วันที่ได้รับ</Typography>
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>สถานที่รับ</Typography>
+                  <Box />
+                </Box>
+                {vaccinesCovid.length > 0 ? vaccinesCovid.map((v: any, i: number) => (
+                  <Box key={i} sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1.5, borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f9fafb" } }}>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#1f2937" }}>{v.vaccineName || v.name || "-"}</Typography>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#4b5563" }}>{fmtDateThaiDirect(v.date || v.vaccineDate) || "-"}</Typography>
+                    <Typography sx={{ fontSize: "0.875rem", color: "#4b5563" }}>{v.location || v.place || v.vaccinePlace || "-"}</Typography>
+                    <Box />
+                  </Box>
+                )) : (
+                  <Typography sx={{ px: 1.5, py: 1, fontSize: "0.875rem" }}>-</Typography>
+                )}
+              </Box>
             </Box>
           </Box>
         </Box>
@@ -1803,29 +2209,61 @@ function RequestReferOutDetailPageInner() {
           >
             ย้อนกลับ
           </Button>
-          {shouldShowCancel && (
-            <Button
-              variant="contained"
-              startIcon={<CloseIcon sx={{ fontSize: "22px !important" }} />}
-              sx={{
-                bgcolor: "#F25555",
-                "&:hover": { bgcolor: "#FF808E" },
-                "&:active": { bgcolor: "#DC4040" },
-                textTransform: "none",
-                fontWeight: 400,
-                fontSize: "16px",
-                fontFamily: "Poppins, sans-serif",
-                color: "#FAFAF9",
-                borderRadius: "4px",
-                px: "16px",
-                py: "8px",
-                minHeight: "40px",
-                boxShadow: "none",
-              }}
-            >
-              ยกเลิกการส่งตัวผู้ป่วย
-            </Button>
-          )}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {shouldShowViewHospitals && (
+              <Button
+                variant="contained"
+                onClick={() => setViewHospitalsModalOpen(true)}
+                startIcon={
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z" />
+                  </svg>
+                }
+                sx={{
+                  bgcolor: "#3b82f6",
+                  "&:hover": { bgcolor: "#091b63" },
+                  "&:active": { bgcolor: "#0735ed" },
+                  textTransform: "none",
+                  fontWeight: 400,
+                  fontSize: "16px",
+                  fontFamily: "Sarabun, sans-serif",
+                  color: "#fff",
+                  borderRadius: "4px",
+                  px: "16px",
+                  py: "8px",
+                  minHeight: "40px",
+                  boxShadow: "none",
+                  border: "none",
+                }}
+              >
+                ดูรายการสถานพยาบาลที่ส่งไป
+              </Button>
+            )}
+            {shouldShowCancel && (
+              <Button
+                variant="contained"
+                onClick={() => setCancelModalOpen(true)}
+                startIcon={<CloseIcon sx={{ fontSize: "22px !important" }} />}
+                sx={{
+                  bgcolor: "#F25555",
+                  "&:hover": { bgcolor: "#FF808E" },
+                  "&:active": { bgcolor: "#DC4040" },
+                  textTransform: "none",
+                  fontWeight: 400,
+                  fontSize: "16px",
+                  fontFamily: "Sarabun, sans-serif",
+                  color: "#FAFAF9",
+                  borderRadius: "4px",
+                  px: "16px",
+                  py: "8px",
+                  minHeight: "40px",
+                  boxShadow: "none",
+                }}
+              >
+                ยกเลิกการส่งตัวผู้ป่วย
+              </Button>
+            )}
+          </Box>
         </Box>
       </Paper>
 

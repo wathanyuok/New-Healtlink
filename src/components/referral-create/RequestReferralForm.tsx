@@ -489,11 +489,11 @@ export default function RequestReferralForm({
   const optionHospital = useAuthStore((s) => s.optionHospital);
   const authProfile = useAuthStore((s) => s.profile);
 
-  // Referral creation point options (ER only) — keep raw to access phone/phone2
+  // Referral creation point options (ER / IPD) — keep raw to access phone/phone2
   const [erReferPoints, setErReferPoints] = useState<any[]>([]);
 
   useEffect(() => {
-    if (kind !== "referER") return;
+    if (kind !== "referER" && kind !== "referIPD") return;
     const authState = useAuthStore.getState();
     const profile: any = authState.profile;
     const hospitalId =
@@ -507,7 +507,7 @@ export default function RequestReferralForm({
             params: {
               useFor: "จุดสร้างใบส่งตัว",
               hospital: hospitalId,
-              isEr: "true",
+              ...(kind === "referER" ? { isEr: "true" } : kind === "referIPD" ? { isIpd: "true" } : { isOpd: "true" }),
               isActive: "true",
             },
           }
@@ -543,7 +543,7 @@ export default function RequestReferralForm({
       return;
     }
 
-    const referralType = kind === "requestReferOut" || kind === "referOut" || kind === "referER"
+    const referralType = kind === "requestReferOut" || kind === "referOut" || kind === "referER" || kind === "referIPD"
       ? "Refer Out - ส่งตัวออก"
       : "Refer Back - ส่งตัวกลับ";
 
@@ -554,7 +554,9 @@ export default function RequestReferralForm({
         referralType,
         ...(kind === "referER"
           ? { isEr: "true", isActive: "true" }
-          : { isOpd: "true" }),
+          : kind === "referIPD"
+            ? { isIpd: "true", isActive: "true" }
+            : { isOpd: "true" }),
       }),
       fetchDoctorUsers({
         hospital: userHospitalId,
@@ -894,8 +896,8 @@ export default function RequestReferralForm({
           >
             <SectionHeader title="ข้อมูลใบส่งตัว" />
             <Box sx={{ p: 2 }}>
-              {/* ER-only: วันที่ส่งตัว + เวลาที่ส่งตัว — top of section */}
-              {kind === "referER" && (
+              {/* ER/IPD: วันที่ส่งตัว + เวลาที่ส่งตัว — top of section */}
+              {(kind === "referER" || kind === "referIPD") && (
                 <Box
                   sx={{
                     display: "grid",
@@ -952,7 +954,7 @@ export default function RequestReferralForm({
                   >
                     สถานพยาบาลปลายทาง
                   </Typography>
-                  {kind === "referER" ? (
+                  {(kind === "referER" || kind === "referIPD") ? (
                     <Typography
                       variant="body2"
                       sx={{ ml: 2, color: "#EAB308" }}
@@ -985,7 +987,7 @@ export default function RequestReferralForm({
                   >
                     จุดรับใบส่งตัว
                   </Typography>
-                  {kind === "referER" ? (
+                  {(kind === "referER" || kind === "referIPD") ? (
                     <Typography
                       variant="body2"
                       sx={{ ml: 2, color: "#EAB308" }}
@@ -1002,7 +1004,7 @@ export default function RequestReferralForm({
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     จุดสร้างใบส่งตัว
-                    {kind === "referER" && (
+                    {(kind === "referER" || kind === "referIPD") && (
                       <Typography
                         component="span"
                         sx={{ color: "#ef4444", ml: 0.5 }}
@@ -1011,7 +1013,7 @@ export default function RequestReferralForm({
                       </Typography>
                     )}
                   </Typography>
-                  {kind === "referER" ? (
+                  {(kind === "referER" || kind === "referIPD") ? (
                     <FormControl fullWidth size="small" sx={{ mt: 1 }}>
                       <Select
                         value={form.referralCreationPoint}
@@ -1070,12 +1072,14 @@ export default function RequestReferralForm({
                     sx={{
                       ml: 2,
                       mt: 2,
-                      color: kind === "referER" ? "#F97316" : "#7c3aed",
+                      color: kind === "referER" ? "#F97316" : kind === "referIPD" ? "#3B82F6" : "#7c3aed",
                     }}
                   >
                     {kind === "referER"
                       ? "Emergency - ผู้ฉุกเฉิน"
-                      : "OPD - ผู้ป่วยนอก"}
+                      : kind === "referIPD"
+                        ? "IPD - ผู้ป่วยใน"
+                        : "OPD - ผู้ป่วยนอก"}
                   </Typography>
 
                   <Typography
@@ -1083,7 +1087,7 @@ export default function RequestReferralForm({
                   >
                     เบอร์ติดต่อจุดใบส่งตัว
                   </Typography>
-                  {kind === "referER" ? (
+                  {(kind === "referER" || kind === "referIPD") ? (
                     <Typography
                       variant="body2"
                       sx={{ ml: 2, color: "#EAB308" }}
@@ -1100,7 +1104,7 @@ export default function RequestReferralForm({
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     เบอร์ติดต่อจุดสร้างใบส่งตัว
-                    {kind !== "referER" && (
+                    {(kind !== "referER" && kind !== "referIPD") && (
                       <Typography
                         component="span"
                         sx={{ color: "#ef4444", ml: 0.5 }}
@@ -1110,7 +1114,7 @@ export default function RequestReferralForm({
                     )}
                   </Typography>
                   {(() => {
-                    if (kind === "referER") {
+                    if (kind === "referER" || kind === "referIPD") {
                       const selected = erReferPoints.find(
                         (o: any) =>
                           String(o.id) === String(form.referralCreationPoint)
@@ -1118,8 +1122,8 @@ export default function RequestReferralForm({
                       if (selected && (selected.phone || selected.phone2)) {
                         return (
                           <Typography variant="body2" sx={{ ml: 2 }}>
-                            {`${selected.phone || "-"} ต่อ ${
-                              selected.phone2 || "-"
+                            {`${selected.phone || 0} ต่อ ${
+                              selected.phone2 || 0
                             }`}
                           </Typography>
                         );
@@ -1135,7 +1139,7 @@ export default function RequestReferralForm({
               </Box>
 
               {/* สาขา/แผนกปลายทาง */}
-              {kind === "referER" ? (
+              {(kind === "referER" || kind === "referIPD") ? (
                 searchParams?.branch_names !== "false" && (
                   <>
                     <Box
@@ -1528,8 +1532,8 @@ export default function RequestReferralForm({
                 )}
               </Box>
 
-              {/* ระดับคนไข้ ICU — เฉพาะ ER */}
-              {kind === "referER" && (
+              {/* ระดับคนไข้ ICU — เฉพาะ ER / IPD */}
+              {(kind === "referER" || kind === "referIPD") && (
                 <Box sx={{ mb: 2 }}>
                   <FieldLabel label="ระดับคนไข้ ICU" required />
                   <FormControl fullWidth size="small">
@@ -1622,7 +1626,7 @@ export default function RequestReferralForm({
                     label="ไม่"
                   />
                 </RadioGroup>
-                {kind !== "referER" && form.is_infectious === "true" && (
+                {(kind !== "referER" && kind !== "referIPD") && form.is_infectious === "true" && (
                   <TextField
                     fullWidth
                     size="small"
@@ -1637,8 +1641,8 @@ export default function RequestReferralForm({
               </Box>
               )}
 
-              {/* ใช้รถส่งตัว + ใช้พยาบาล — เฉพาะ ER */}
-              {kind === "referER" && (
+              {/* ใช้รถส่งตัว + ใช้พยาบาล — เฉพาะ ER / IPD */}
+              {(kind === "referER" || kind === "referIPD") && (
                 <>
                   <Box sx={{ mb: 2 }}>
                     <Typography
@@ -1816,12 +1820,13 @@ export default function RequestReferralForm({
                   size="small"
                   placeholder="กรอกหมายเลขบัตรประชาชน"
                   value={form.patient_pid}
-                  onChange={(e) =>
-                    updateField("patient_pid", e.target.value)
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    updateField("patient_pid", v);
+                  }}
                   error={!!formErrors.patient_pid}
                   helperText={formErrors.patient_pid}
-                  inputProps={{ maxLength: 13 }}
+                  inputProps={{ maxLength: 13, inputMode: "numeric" }}
                 />
               </Box>
 
@@ -2477,9 +2482,11 @@ export default function RequestReferralForm({
                   size="small"
                   placeholder="อุณหภูมิ"
                   value={form.temperature}
-                  onChange={(e) =>
-                    updateField("temperature", e.target.value)
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9.]/g, "");
+                    updateField("temperature", v);
+                  }}
+                  inputProps={{ inputMode: "decimal" }}
                 />
               </Box>
               <Box>
@@ -2489,7 +2496,11 @@ export default function RequestReferralForm({
                     size="small"
                     placeholder="BP"
                     value={form.bps}
-                    onChange={(e) => updateField("bps", e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "");
+                      updateField("bps", v);
+                    }}
+                    inputProps={{ inputMode: "numeric" }}
                     sx={{ flex: 1 }}
                   />
                   <Typography sx={{ color: "#6b7280" }}>/</Typography>
@@ -2497,7 +2508,11 @@ export default function RequestReferralForm({
                     size="small"
                     placeholder="M"
                     value={form.bpd}
-                    onChange={(e) => updateField("bpd", e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "");
+                      updateField("bpd", v);
+                    }}
+                    inputProps={{ inputMode: "numeric" }}
                     sx={{ flex: 1 }}
                   />
                 </Box>
@@ -2509,7 +2524,11 @@ export default function RequestReferralForm({
                   size="small"
                   placeholder="PR"
                   value={form.pulse}
-                  onChange={(e) => updateField("pulse", e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    updateField("pulse", v);
+                  }}
+                  inputProps={{ inputMode: "numeric" }}
                 />
               </Box>
               <Box>
@@ -2519,7 +2538,11 @@ export default function RequestReferralForm({
                   size="small"
                   placeholder="RR"
                   value={form.rr}
-                  onChange={(e) => updateField("rr", e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    updateField("rr", v);
+                  }}
+                  inputProps={{ inputMode: "numeric" }}
                 />
               </Box>
             </Box>

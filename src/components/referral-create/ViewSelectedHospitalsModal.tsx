@@ -83,7 +83,7 @@ export default function ViewSelectedHospitalsModal({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {hospitals.map((h, i) => (
+                {hospitals.filter((h) => h.name || h.phone || (h as any).image).map((h, i) => (
                   <TableRow
                     key={h.id}
                     sx={{ borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f9fafb" } }}

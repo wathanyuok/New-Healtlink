@@ -18,10 +18,12 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-/** Format ISO date (yyyy-mm-dd) to Thai Buddhist era: "24 เม.ย. 2569" */
+/** Format ISO date (yyyy-mm-dd or yyyy-mm-ddTHH:mm:ss) to Thai Buddhist era: "24 เม.ย. 2569" */
 export function formatThaiDate(dateStr: string): string {
   if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-").map(Number);
+  // Strip time portion if present (e.g. "2021-04-02T00:00:00.000Z" → "2021-04-02")
+  const datePart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  const [y, m, d] = datePart.split("-").map(Number);
   if (!y || !m || !d) return dateStr;
   return `${d} ${THAI_MONTHS_SHORT[m - 1]} ${y + 543}`;
 }
@@ -107,15 +109,18 @@ export default function ThaiDateInput({
   // Year grid page
   const [yearPageStart, setYearPageStart] = useState(today.getFullYear() - 6);
 
+  // Normalize value: strip time portion if present
+  const normalizedValue = value && value.includes("T") ? value.split("T")[0] : value;
+
   // Sync calendar to selected date — only when opening (not during navigation)
   const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open && !prevOpenRef.current && value) {
-      const [y, m] = value.split("-").map(Number);
+    if (open && !prevOpenRef.current && normalizedValue) {
+      const [y, m] = normalizedValue.split("-").map(Number);
       if (y && m) { setViewYear(y); setViewMonth(m - 1); }
     }
     prevOpenRef.current = open;
-  }, [open, value]);
+  }, [open, normalizedValue]);
 
   // Close on outside click
   useEffect(() => {
@@ -163,9 +168,9 @@ export default function ThaiDateInput({
   };
 
   // Selected date parts
-  const selectedDay = value ? Number(value.split("-")[2]) : null;
-  const selectedMonth = value ? Number(value.split("-")[1]) - 1 : null;
-  const selectedYear = value ? Number(value.split("-")[0]) : null;
+  const selectedDay = normalizedValue ? Number(normalizedValue.split("-")[2]) : null;
+  const selectedMonth = normalizedValue ? Number(normalizedValue.split("-")[1]) - 1 : null;
+  const selectedYear = normalizedValue ? Number(normalizedValue.split("-")[0]) : null;
 
   const borderColor = error ? "#ef4444" : "#d1d5db";
 
@@ -318,7 +323,7 @@ export default function ThaiDateInput({
           size="small"
           onClick={() => {
             // Select today if no date selected yet
-            if (!value) {
+            if (!normalizedValue) {
               const mm = String(today.getMonth() + 1).padStart(2, "0");
               const dd = String(today.getDate()).padStart(2, "0");
               onChange(`${today.getFullYear()}-${mm}-${dd}`);
@@ -465,12 +470,12 @@ export default function ThaiDateInput({
       >
         <Typography sx={{
           flex: 1, fontSize: "0.875rem",
-          color: value ? "#1f2937" : "#9ca3af",
+          color: normalizedValue ? "#1f2937" : "#9ca3af",
           pointerEvents: "none",
         }}>
-          {value ? formatThaiDate(value) : placeholder}
+          {normalizedValue ? formatThaiDate(normalizedValue) : placeholder}
         </Typography>
-        {value ? (
+        {normalizedValue ? (
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onChange(""); }}

@@ -12,6 +12,10 @@ interface UserProfile {
       id: number;
       name: string;
     };
+    hospital?: {
+      id: number;
+      name?: string;
+    };
     permissions?: any[];
   };
   hospital?: any;
