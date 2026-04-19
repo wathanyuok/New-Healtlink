@@ -16,9 +16,21 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Dialog,
+  DialogContent,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SaveIcon from "@mui/icons-material/Save";
 import TreatmentDocuments, { type DocumentItem as TreatDocItem } from "@/components/shared/TreatmentDocuments";
+import { useAuthStore } from "@/stores/authStore";
 /* ep:edit icon — pencil with square border (matches Element Plus) */
 const EpEditIcon = ({ size = 22, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 1024 1024" fill={color}>
@@ -181,6 +193,272 @@ function calculateAge(birthday: string | undefined | null): string {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Life status options (matches Nuxt lifeStatusOption)                 */
+/* ------------------------------------------------------------------ */
+const LIFE_STATUS_OPTIONS = [
+  { value: "มีชีวิต", text: "มีชีวิต", color: "#00AF75" },
+  { value: "เสียชีวิต", text: "เสียชีวิต", color: "#EF4444" },
+  { value: "หลบหนี", text: "หลบหนี", color: "#A855F7" },
+];
+
+interface LifeStatusLog {
+  referralLifeStatus: string;
+  referralLifeStatusNote: string;
+  name: string;
+  updatedAt: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  LifeStatusModal — matches Nuxt modalStatusLife.vue                 */
+/* ------------------------------------------------------------------ */
+function LifeStatusModal({
+  open,
+  onClose,
+  onSave,
+  logs,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (payload: { referralLifeStatus: string; referralLifeStatusNote: string; referralLifeStatusLogs: LifeStatusLog[] }) => void;
+  logs: LifeStatusLog[];
+}) {
+  const { profile } = useAuthStore();
+  const [status, setStatus] = useState("");
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<{ status?: string; note?: string }>({});
+
+  // Populate form with latest log entry when modal opens (matches Nuxt setLatestLogToFields)
+  useEffect(() => {
+    if (open && logs.length > 0) {
+      const latest = [...logs].reverse()[0];
+      setStatus(latest.referralLifeStatus || "");
+      setNote(latest.referralLifeStatusNote || "");
+    } else if (open) {
+      setStatus("");
+      setNote("");
+    }
+    setErrors({});
+  }, [open, logs]);
+
+  const validate = (): boolean => {
+    const newErrors: { status?: string; note?: string } = {};
+    if (!status) newErrors.status = "กรุณาเลือกสถานะของผู้ป่วย";
+    if (!note.trim()) newErrors.note = "กรุณากรอกรายละเอียด";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+
+    const userName = profile?.fullName || profile?.username || "ไม่ทราบ";
+    const newLog: LifeStatusLog = {
+      referralLifeStatus: status,
+      referralLifeStatusNote: note,
+      name: userName,
+      updatedAt: new Date().toISOString(),
+    };
+    const updatedLogs = [...logs, newLog];
+
+    onSave({
+      referralLifeStatus: status,
+      referralLifeStatusNote: note,
+      referralLifeStatusLogs: updatedLogs,
+    });
+  };
+
+  // Build display data for log history
+  const logNames = logs.length > 0
+    ? logs.map((l) => l.name).join(", ")
+    : "ยังไม่มีการบันทึก";
+  const logDates = logs.length > 0
+    ? logs.map((l) => fmtDate(l.updatedAt)).join(", ")
+    : "ยังไม่มีการบันทึก";
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: "8px", overflow: "hidden" } }}
+    >
+      {/* Green header — matches Nuxt */}
+      <Box sx={{
+        bgcolor: "#00AF75",
+        px: "24px",
+        py: "16px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: "1.125rem" }}>
+          สถานะของผู้ป่วยปัจจุบัน
+        </Typography>
+        <IconButton onClick={onClose} sx={{ color: "#fff", p: "4px" }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <DialogContent sx={{ px: "24px", py: "24px" }}>
+        {/* Status dropdown */}
+        <FormControl fullWidth error={!!errors.status} sx={{ mb: "20px" }}>
+          <InputLabel
+            id="life-status-label"
+            shrink
+            sx={{
+              fontSize: "0.875rem",
+              color: "#374151",
+              fontWeight: 500,
+              transform: "translate(0, -8px)",
+              position: "relative",
+              "&.Mui-focused": { color: "#374151" },
+            }}
+          >
+            สถานะของผู้ป่วย <span style={{ color: "#EF4444" }}>*</span>
+          </InputLabel>
+          <Select
+            labelId="life-status-label"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              if (errors.status) setErrors((prev) => ({ ...prev, status: undefined }));
+            }}
+            displayEmpty
+            size="small"
+            sx={{
+              mt: "8px",
+              borderRadius: "6px",
+              "& .MuiSelect-select": { py: "10px", pr: status ? "48px !important" : undefined },
+            }}
+            endAdornment={
+              status ? (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStatus("");
+                  }}
+                  sx={{ position: "absolute", right: 28, p: "2px" }}
+                >
+                  <CloseIcon sx={{ fontSize: 18, color: "#9ca3af" }} />
+                </IconButton>
+              ) : null
+            }
+            renderValue={(val) => {
+              if (!val) return <span style={{ color: "#9ca3af" }}>เลือกสถานะ</span>;
+              const opt = LIFE_STATUS_OPTIONS.find((o) => o.value === val);
+              return <span style={{ color: opt?.color || "#111827" }}>{opt?.text || val}</span>;
+            }}
+          >
+            {LIFE_STATUS_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                <span style={{ color: opt.color, fontWeight: 500 }}>{opt.text}</span>
+              </MenuItem>
+            ))}
+          </Select>
+          {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
+        </FormControl>
+
+        {/* Detail textarea */}
+        <Box sx={{ mb: "20px" }}>
+          <Typography sx={{ fontSize: "0.875rem", color: "#374151", fontWeight: 500, mb: "8px" }}>
+            รายละเอียด <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            maxRows={6}
+            placeholder="คำอธิบาย"
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              if (errors.note) setErrors((prev) => ({ ...prev, note: undefined }));
+            }}
+            error={!!errors.note}
+            helperText={errors.note}
+            size="small"
+            sx={{
+              "& .MuiOutlinedInput-root": { borderRadius: "6px" },
+            }}
+          />
+        </Box>
+
+        {/* Log history info — matches Nuxt */}
+        <Box sx={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "16px",
+          borderTop: "1px solid #E5E7EB",
+          pt: "16px",
+        }}>
+          <Box>
+            <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", mb: "4px" }}>
+              ผู้บันทึกข้อมูล
+            </Typography>
+            <Typography sx={{ fontSize: "0.875rem", color: "#111827" }}>
+              {logNames}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", mb: "4px" }}>
+              เวลา/วันที่ บันทึกข้อมูล
+            </Typography>
+            <Typography sx={{ fontSize: "0.875rem", color: "#111827" }}>
+              {logDates}
+            </Typography>
+          </Box>
+        </Box>
+      </DialogContent>
+
+      {/* Footer buttons — matches Nuxt */}
+      <Box sx={{
+        px: "24px",
+        py: "16px",
+        borderTop: "1px solid #E5E7EB",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: "12px",
+      }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon sx={{ fontSize: "18px !important" }} />}
+          onClick={onClose}
+          sx={{
+            textTransform: "none",
+            borderColor: "#D1D5DB",
+            color: "#374151",
+            fontWeight: 500,
+            borderRadius: "6px",
+            px: "20px",
+            "&:hover": { bgcolor: "#F9FAFB", borderColor: "#D1D5DB" },
+          }}
+        >
+          ยกเลิก
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<SaveIcon sx={{ fontSize: "18px !important" }} />}
+          onClick={handleSave}
+          sx={{
+            bgcolor: "#00AF75",
+            textTransform: "none",
+            fontWeight: 500,
+            borderRadius: "6px",
+            px: "20px",
+            boxShadow: "none",
+            "&:hover": { bgcolor: "#009966", boxShadow: "none" },
+          }}
+        >
+          บันทึกข้อมูล
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  PatientInfoSection — matches Nuxt patient-info.vue                 */
 /* ------------------------------------------------------------------ */
 function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
@@ -323,6 +601,216 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  CancelReferralModal — matches Nuxt modalSubmitPatient.vue          */
+/* ------------------------------------------------------------------ */
+function CancelReferralModal({
+  open,
+  onClose,
+  onSave,
+  deliveryPeriod,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (payload: { referralStatus: number; referralStatusDetailCurrent: number; referralStatusDetailCurrentText: string }) => void;
+  deliveryPeriod?: any;
+}) {
+  const { findStatusDetail } = useReferralStore();
+  const [reason, setReason] = useState<number | "">("");
+  const [detail, setDetail] = useState("");
+  const [errors, setErrors] = useState<{ reason?: string; detail?: string }>({});
+  const [reasonOptions, setReasonOptions] = useState<{ value: number; name: string }[]>([]);
+
+  // Fetch cancel reason options when modal opens — matches Nuxt fetchReferralStatusDetail
+  useEffect(() => {
+    if (!open) return;
+    setReason("");
+    setDetail("");
+    setErrors({});
+
+    const fetchOptions = async () => {
+      try {
+        // Determine referral kind flags from deliveryPeriod (like Nuxt)
+        const kindName = deliveryPeriod?.referralKind?.name || "";
+        const params: any = {
+          statusType: "ยกเลิก",
+          isActive: true,
+        };
+        if (kindName === "OPD" || kindName === "ผู้ป่วยนอก") params.isOpd = true;
+        else if (kindName === "IPD" || kindName === "ผู้ป่วยใน") params.isIpd = true;
+        else if (kindName === "EMERGENCY" || kindName === "ฉุกเฉิน") params.isEr = true;
+
+        const res = await findStatusDetail(params);
+        const items = res?.referralStatusDetails || res || [];
+        setReasonOptions(
+          Array.isArray(items)
+            ? items.map((item: any) => ({ value: item.id, name: item.name }))
+            : []
+        );
+      } catch {
+        setReasonOptions([]);
+      }
+    };
+    fetchOptions();
+  }, [open, deliveryPeriod, findStatusDetail]);
+
+  const validate = (): boolean => {
+    const newErrors: { reason?: string; detail?: string } = {};
+    if (!reason) newErrors.reason = "กรุณาเลือกเหตุผล";
+    if (!detail.trim()) newErrors.detail = "กรุณากรอกรายละเอียด";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    onSave({
+      referralStatus: 5, // Status ID for cancellation (matches Nuxt)
+      referralStatusDetailCurrent: reason as number,
+      referralStatusDetailCurrentText: detail,
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: "8px", overflow: "hidden" } }}
+    >
+      {/* Green header */}
+      <Box sx={{
+        bgcolor: "#00AF75",
+        px: "24px",
+        py: "16px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: "1.125rem" }}>
+          ยืนยันการยกเลิกการส่งตัวผู้ป่วย
+        </Typography>
+        <IconButton onClick={onClose} sx={{ color: "#fff", p: "4px" }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <DialogContent sx={{ px: "24px", py: "24px" }}>
+        {/* Reason dropdown */}
+        <FormControl fullWidth error={!!errors.reason} sx={{ mb: "20px" }}>
+          <Typography sx={{ fontSize: "0.875rem", color: "#374151", fontWeight: 500, mb: "8px" }}>
+            เหตุผลการยกเลิก <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
+          <Select
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value as number);
+              if (errors.reason) setErrors((prev) => ({ ...prev, reason: undefined }));
+            }}
+            displayEmpty
+            size="small"
+            MenuProps={{ PaperProps: { sx: { maxHeight: 250 } } }}
+            sx={{
+              borderRadius: "6px",
+              "& .MuiSelect-select": { py: "10px", pr: reason ? "48px !important" : undefined },
+            }}
+            endAdornment={
+              reason ? (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReason("");
+                  }}
+                  sx={{ position: "absolute", right: 28, p: "2px" }}
+                >
+                  <CloseIcon sx={{ fontSize: 18, color: "#9ca3af" }} />
+                </IconButton>
+              ) : null
+            }
+            renderValue={(val) => {
+              if (!val) return <span style={{ color: "#9ca3af" }}>เลือกเหตุผลการยกเลิก</span>;
+              const opt = reasonOptions.find((o) => o.value === val);
+              return opt?.name || String(val);
+            }}
+          >
+            {reasonOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                {opt.name}
+              </MenuItem>
+            ))}
+          </Select>
+          {errors.reason && <FormHelperText>{errors.reason}</FormHelperText>}
+        </FormControl>
+
+        {/* Detail text input */}
+        <Box>
+          <Typography sx={{ fontSize: "0.875rem", color: "#374151", fontWeight: 500, mb: "8px" }}>
+            รายละเอียด <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
+          <TextField
+            fullWidth
+            placeholder="กรุณากรอกรายละเอียด"
+            value={detail}
+            onChange={(e) => {
+              setDetail(e.target.value);
+              if (errors.detail) setErrors((prev) => ({ ...prev, detail: undefined }));
+            }}
+            error={!!errors.detail}
+            helperText={errors.detail}
+            size="small"
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "6px" } }}
+          />
+        </Box>
+      </DialogContent>
+
+      {/* Footer buttons */}
+      <Box sx={{
+        px: "24px",
+        py: "16px",
+        borderTop: "1px solid #E5E7EB",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: "12px",
+      }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon sx={{ fontSize: "18px !important" }} />}
+          onClick={onClose}
+          sx={{
+            textTransform: "none",
+            borderColor: "#00AF75",
+            color: "#00AF75",
+            fontWeight: 500,
+            borderRadius: "6px",
+            px: "20px",
+            "&:hover": { bgcolor: "#f0fdf4", borderColor: "#00AF75" },
+          }}
+        >
+          ยกเลิก
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<SaveIcon sx={{ fontSize: "18px !important" }} />}
+          onClick={handleSave}
+          sx={{
+            bgcolor: "#00AF75",
+            textTransform: "none",
+            fontWeight: 500,
+            borderRadius: "6px",
+            px: "20px",
+            boxShadow: "none",
+            "&:hover": { bgcolor: "#009966", boxShadow: "none" },
+          }}
+        >
+          บันทึกข้อมูล
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main page component                                                */
 /* ------------------------------------------------------------------ */
 function RequestReferOutDetailPageInner() {
@@ -330,12 +818,16 @@ function RequestReferOutDetailPageInner() {
   const router = useRouter();
   const id = searchParams.get("id");
 
-  const { findOneReferral, findGroupCase, updateReferral } = useReferralStore();
+  const { findOneReferral, findGroupCase, updateReferral, getPatientHistory } = useReferralStore();
   const { uploadFile } = useHospitalStore();
 
   const [loading, setLoading] = useState(true);
   const [doc, setDoc] = useState<any>(null);
   const [groupDocs, setGroupDocs] = useState<any[]>([]);
+  const [lifeStatusModalOpen, setLifeStatusModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -391,6 +883,74 @@ function RequestReferOutDetailPageInner() {
       setDoc((prev: any) => ({ ...prev, referralFiles: newFiles }));
     } catch (err) {
       console.error("Error uploading file:", err);
+    }
+  };
+
+  // Handle life status modal save — matches Nuxt checkFormData + handleModelStatusLife
+  const handleLifeStatusSave = async (payload: {
+    referralLifeStatus: string;
+    referralLifeStatusNote: string;
+    referralLifeStatusLogs: LifeStatusLog[];
+  }) => {
+    if (!doc?.id) return;
+    try {
+      await updateReferral(doc.id, payload);
+      setLifeStatusModalOpen(false);
+      // Refresh data (matches Nuxt getDataRefer)
+      await fetchData();
+    } catch (err) {
+      console.error("Error updating life status:", err);
+    }
+  };
+
+  // Go to patient treatment history — matches Nuxt gotoHistoryPatient()
+  const gotoHistoryPatient = async () => {
+    if (!doc) return;
+    const patient = doc.data?.patient || {};
+    const data = {
+      hospitalCode: "000000000",
+      patientCid: patient.patient_pid,
+      patientFirstName: patient.patient_firstname,
+      patientLastName: patient.patient_lastname,
+    };
+    const showToast = (msg: string) => {
+      setToastMessage(msg);
+      setToastOpen(true);
+    };
+    try {
+      const res = await getPatientHistory(data);
+      if (res?.response?.status === "PERMISSION_ERROR") {
+        showToast("ขออภัย สถานพยาบาลของท่านยังไม่เปิดใช้งาน กรุณาติดต่อ Health Link 02 026 2333 ต่อ 3456");
+        return;
+      }
+      if (res?.response?.status === "USER_NOT_FOUND") {
+        showToast("ขออภัย ไม่พบชื่อของท่านในระบบ กรุณาติดต่อแผนกไอทีของสถานพยาบาล เพื่อเพิ่มรายชื่อของท่าน");
+        return;
+      }
+      if (res?.response?.url) {
+        window.open(res.response.url, "_blank");
+      } else {
+        showToast("ไม่พบประวัติการรักษาของผู้ป่วย");
+      }
+    } catch (err) {
+      console.error("Error getting patient history:", err);
+      showToast("ไม่พบประวัติการรักษาของผู้ป่วย");
+    }
+  };
+
+  // Handle cancel referral — matches Nuxt handleCancelRefer
+  const handleCancelReferral = async (payload: {
+    referralStatus: number;
+    referralStatusDetailCurrent: number;
+    referralStatusDetailCurrentText: string;
+  }) => {
+    if (!doc?.id) return;
+    try {
+      await updateReferral(doc.id, payload);
+      setCancelModalOpen(false);
+      await fetchData();
+    } catch (err) {
+      console.error("Error cancelling referral:", err);
     }
   };
 
@@ -491,10 +1051,59 @@ function RequestReferOutDetailPageInner() {
     sortedGroupDocs.length > 0 &&
     doc.id === sortedGroupDocs[0]?.id;
 
+  // Check if print button should show — matches Nuxt: status exists, not "รอตอบรับ", is latest in group
+  const shouldShowPrint = statusName &&
+    statusName !== "รอตอบรับ" &&
+    sortedGroupDocs.length > 0 &&
+    doc.id === sortedGroupDocs[0]?.id;
+
   const lifeStatus = doc.referralLifeStatus || "มีชีวิต";
+  const lifeStatusLogs: LifeStatusLog[] = doc.referralLifeStatusLogs || [];
 
   return (
     <Box sx={{ px: "24px" }}>
+      {/* ── Toast notification (matches Nuxt style) ── */}
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={4000}
+        onClose={() => setToastOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setToastOpen(false)}
+          severity="error"
+          variant="filled"
+          sx={{
+            width: "100%",
+            bgcolor: "#FEE2E2",
+            color: "#DC2626",
+            fontWeight: 500,
+            "& .MuiAlert-icon": { color: "#DC2626" },
+            "& .MuiAlert-action .MuiIconButton-root": { color: "#374151" },
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+        >
+          <Typography sx={{ fontWeight: 700, fontSize: "0.875rem", color: "#DC2626" }}>ระบบ</Typography>
+          <Typography sx={{ fontSize: "0.875rem", color: "#DC2626" }}>{toastMessage}</Typography>
+        </Alert>
+      </Snackbar>
+
+      {/* ── Life Status Modal ── */}
+      <LifeStatusModal
+        open={lifeStatusModalOpen}
+        onClose={() => setLifeStatusModalOpen(false)}
+        onSave={handleLifeStatusSave}
+        logs={lifeStatusLogs}
+      />
+
+      {/* ── Cancel Referral Modal ── */}
+      <CancelReferralModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        onSave={handleCancelReferral}
+        deliveryPeriod={doc}
+      />
+
       {/* ── Header row ── */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: "24px" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -519,6 +1128,7 @@ function RequestReferOutDetailPageInner() {
         {shouldShowCancel && (
           <Button
             variant="contained"
+            onClick={() => setCancelModalOpen(true)}
             startIcon={<CloseIcon sx={{ fontSize: "22px !important" }} />}
             sx={{
               bgcolor: "#F25555",
@@ -598,6 +1208,7 @@ function RequestReferOutDetailPageInner() {
         {/* Status life + History buttons */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: "12px" }}>
           <Box
+            onClick={() => setLifeStatusModalOpen(true)}
             sx={{
               bgcolor: getStatusBgColor(lifeStatus),
               color: "#fff",
@@ -620,31 +1231,65 @@ function RequestReferOutDetailPageInner() {
             </Typography>
             <EpEditIcon size={22} color="#fff" />
           </Box>
-          <Button
-            variant="outlined"
-            startIcon={
-              <Image
-                src="/images/logo2.png"
-                alt="Health Link"
-                width={35}
-                height={35}
-                style={{ objectFit: "contain" }}
-              />
-            }
-            sx={{
-              borderColor: "#00AF75",
-              color: "#00AF75",
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "1rem",
-              borderRadius: "8px",
-              px: "16px",
-              py: "4px",
-              "&:hover": { bgcolor: "#f0fdf4", borderColor: "#00AF75" },
-            }}
-          >
-            ประวัติการรักษา
-          </Button>
+          <Box sx={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <Button
+              variant="outlined"
+              onClick={gotoHistoryPatient}
+              startIcon={
+                <Image
+                  src="/images/logo2.png"
+                  alt="Health Link"
+                  width={35}
+                  height={35}
+                  style={{ objectFit: "contain" }}
+                />
+              }
+              sx={{
+                borderColor: "#00AF75",
+                color: "#00AF75",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "1rem",
+                borderRadius: "8px",
+                px: "16px",
+                py: "4px",
+                "&:hover": { bgcolor: "#f0fdf4", borderColor: "#00AF75" },
+              }}
+            >
+              ประวัติการรักษา
+            </Button>
+            {shouldShowPrint && (
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  // Open print page in new tab — it will replace itself with PDF blob
+                  // Result: detail tab stays + print tab becomes blob tab (like Nuxt)
+                  const printUrl = `/print-refer?id=${doc.id}&referraltype=refer-out&isWatch=true&printReferral=true`;
+                  window.open(printUrl, "_blank");
+                }}
+                startIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                  </svg>
+                }
+                sx={{
+                  borderColor: "#3B82F6",
+                  color: "#3B82F6",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "1rem",
+                  borderRadius: "8px",
+                  px: "16px",
+                  py: "4px",
+                  "&:hover": { bgcolor: "#EFF6FF", borderColor: "#3B82F6" },
+                }}
+              >
+                พิมพ์เอกสารส่งตัว
+              </Button>
+            )}
+          </Box>
         </Box>
 
         {/* ── Two-column: Referral Info + Patient Info ── */}
