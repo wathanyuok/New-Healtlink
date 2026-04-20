@@ -154,6 +154,9 @@ export interface ReferralFormData {
   doctorCode: string;
   medicalDepartment: string;
   doctorContactNumber: string;
+  // Certification period (OPD)
+  certificationPeriod: string | number;
+  deliveryPeriod: any[];
   // Documents
   documents: DocumentItem[];
 }
@@ -205,6 +208,8 @@ const defaultFormData: ReferralFormData = {
   use_nurse: "",
   additionalComments: "",
   requiredEquipment: [],
+  certificationPeriod: "",
+  deliveryPeriod: [{ startDelivery: "", startDeliveryTime: "", startDelivery2: "", endDeliveryTime: "" }],
   physicalExam: "",
   diseases: [],
   drugAllergy: [],
@@ -923,6 +928,238 @@ export default function RequestReferralForm({
                       minWidth="100%"
                     />
                   </Box>
+                </Box>
+              )}
+
+              {/* ระยะเวลารับรองสิทธิ์ — OPD only (not referBack) */}
+              {kind !== "referER" && kind !== "referIPD" && kind !== "referBack" && (
+                <Box
+                  sx={{
+                    mb: 3,
+                    p: 3,
+                    bgcolor: "#FEFCE8",
+                    borderRadius: 2,
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #111", pb: 1, mb: 2 }}>
+                    <Typography sx={{ fontWeight: 600, fontSize: "1.1rem", color: "#036245" }}>
+                      ระยะเวลารับรองสิทธิ์ <span style={{ color: "#ef4444" }}>*</span>
+                    </Typography>
+                    <Tooltip
+                      title={
+                        <Box sx={{ p: 1, fontSize: "0.85rem", whiteSpace: "pre-line" }}>
+                          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>ระยะเวลารับรองสิทธิ์แต่ละแบบจะมีผลกับการนัดหมาย</Typography>
+                          <b>ใช้ได้ครั้งเดียว</b> — จะไม่สามารถนัดรักษาต่อเนื่องได้{"\n"}
+                          <b>กำหนดช่วง และ อื่นๆ</b> — สามารถกำหนดนัดหมายได้ภายในช่วงเวลาที่กำหนดเท่านั้น
+                        </Box>
+                      }
+                      arrow
+                      slotProps={{ tooltip: { sx: { bgcolor: "#036245", color: "white", maxWidth: 400 } } }}
+                    >
+                      <IconButton size="small" sx={{ color: "#9ca3af" }}>
+                        <HelpOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <RadioGroup
+                    row
+                    value={String(form.certificationPeriod)}
+                    onChange={(e) => updateField("certificationPeriod", Number(e.target.value))}
+                    sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" }, gap: 1, mb: 2 }}
+                  >
+                    {[
+                      { value: 1, label: "ใช้ได้ครั้งเดียว" },
+                      { value: 2, label: "กำหนดช่วง" },
+                      { value: 3, label: "1 เดือน" },
+                      { value: 4, label: "3 เดือน" },
+                      { value: 5, label: "6 เดือน" },
+                      { value: 6, label: "1 ปี" },
+                      { value: 7, label: "สิ้นสุดปีงบ" },
+                    ].map((opt) => (
+                      <FormControlLabel
+                        key={opt.value}
+                        value={String(opt.value)}
+                        control={<Radio size="small" sx={{ color: "#9ca3af", "&.Mui-checked": { color: "#00AF75" } }} />}
+                        label={<Typography sx={{ fontSize: "0.875rem" }}>{opt.label}</Typography>}
+                        sx={{
+                          m: 0,
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                          border: form.certificationPeriod === opt.value ? "2px solid #00AF75" : "1px solid transparent",
+                          bgcolor: form.certificationPeriod === opt.value ? "#f0fdf4" : "transparent",
+                        }}
+                      />
+                    ))}
+                  </RadioGroup>
+                  {/* === Radio 1: ใช้ได้ครั้งเดียว === */}
+                  {form.certificationPeriod === 1 && (
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, mt: 2 }}>
+                      <Box>
+                        <FieldLabel label="วันที่เริ่มต้น" required />
+                        <ThaiDateInput
+                          value={form.deliveryPeriod?.[0]?.startDelivery || ""}
+                          onChange={(val) => {
+                            const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                            dp[0] = { ...dp[0], startDelivery: val };
+                            updateField("deliveryPeriod", dp);
+                          }}
+                          placeholder="DD/MM/YY"
+                        />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="เวลาเริ่มต้น" required />
+                        <ThaiTimeInput
+                          value={form.deliveryPeriod?.[0]?.endDelivery || ""}
+                          onChange={(val) => {
+                            const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                            dp[0] = { ...dp[0], endDelivery: val };
+                            updateField("deliveryPeriod", dp);
+                          }}
+                          placeholder="HH:MM"
+                          minWidth="100%"
+                        />
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* === Radio 2: กำหนดช่วง === */}
+                  {form.certificationPeriod === 2 && (
+                    <Box sx={{ mt: 2 }}>
+                      {/* Row 1: วันที่เริ่มต้น + เวลา */}
+                      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, mb: 2 }}>
+                        <Box>
+                          <FieldLabel label="วันที่เริ่มต้น" required />
+                          <ThaiDateInput
+                            value={form.deliveryPeriod?.[0]?.startDelivery || ""}
+                            onChange={(val) => {
+                              const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                              dp[0] = { ...dp[0], startDelivery: val };
+                              updateField("deliveryPeriod", dp);
+                            }}
+                            placeholder="DD/MM/YY"
+                          />
+                        </Box>
+                        <Box>
+                          <FieldLabel label="เวลา" required />
+                          <ThaiTimeInput
+                            value={form.deliveryPeriod?.[0]?.endDelivery || ""}
+                            onChange={(val) => {
+                              const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                              dp[0] = { ...dp[0], endDelivery: val };
+                              updateField("deliveryPeriod", dp);
+                            }}
+                            placeholder="HH:MM"
+                            minWidth="100%"
+                          />
+                        </Box>
+                      </Box>
+                      {/* Row 2: วันหมดอายุ + เวลา */}
+                      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+                        <Box>
+                          <FieldLabel label="วันหมดอายุ" required />
+                          <ThaiDateInput
+                            value={form.deliveryPeriod?.[0]?.startDelivery2 || ""}
+                            onChange={(val) => {
+                              const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                              dp[0] = { ...dp[0], startDelivery2: val };
+                              updateField("deliveryPeriod", dp);
+                            }}
+                            placeholder="DD/MM/YY"
+                          />
+                        </Box>
+                        <Box>
+                          <FieldLabel label="เวลา" required />
+                          <ThaiTimeInput
+                            value={form.deliveryPeriod?.[0]?.endDelivery2 || ""}
+                            onChange={(val) => {
+                              const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                              dp[0] = { ...dp[0], endDelivery2: val };
+                              updateField("deliveryPeriod", dp);
+                            }}
+                            placeholder="HH:MM"
+                            minWidth="100%"
+                          />
+                        </Box>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* === Radio 3-7: 1 เดือน / 3 เดือน / 6 เดือน / 1 ปี / สิ้นสุดปีงบ === */}
+                  {[3, 4, 5, 6, 7].includes(Number(form.certificationPeriod)) && (
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, mt: 2 }}>
+                      <Box>
+                        <FieldLabel label="วันที่เริ่มต้น" required />
+                        <ThaiDateInput
+                          value={form.deliveryPeriod?.[0]?.startDelivery || ""}
+                          onChange={(val) => {
+                            const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                            dp[0] = { ...dp[0], startDelivery: val };
+                            // Auto-calculate end date based on period
+                            if (val) {
+                              try {
+                                const parts = val.includes("T") ? val.split("T")[0].split("-") : val.split("-");
+                                const startDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                                if (!isNaN(startDate.getTime())) {
+                                  const endDate = new Date(startDate);
+                                  const period = Number(form.certificationPeriod);
+                                  if (period === 3) endDate.setMonth(endDate.getMonth() + 1);
+                                  else if (period === 4) endDate.setMonth(endDate.getMonth() + 3);
+                                  else if (period === 5) endDate.setMonth(endDate.getMonth() + 6);
+                                  else if (period === 6) endDate.setFullYear(endDate.getFullYear() + 1);
+                                  else if (period === 7) {
+                                    const fiscalYearEnd = startDate.getMonth() >= 9
+                                      ? new Date(startDate.getFullYear() + 1, 8, 30)
+                                      : new Date(startDate.getFullYear(), 8, 30);
+                                    endDate.setTime(fiscalYearEnd.getTime());
+                                  }
+                                  const y = endDate.getFullYear();
+                                  const m = String(endDate.getMonth() + 1).padStart(2, "0");
+                                  const d = String(endDate.getDate()).padStart(2, "0");
+                                  dp[0].startDelivery2 = `${y}-${m}-${d}`;
+                                }
+                              } catch { /* ignore */ }
+                            }
+                            updateField("deliveryPeriod", dp);
+                          }}
+                          placeholder="DD/MM/YY"
+                        />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="เวลา" required />
+                        <ThaiTimeInput
+                          value={form.deliveryPeriod?.[0]?.endDelivery || ""}
+                          onChange={(val) => {
+                            const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
+                            dp[0] = { ...dp[0], endDelivery: val, endDelivery2: val };
+                            updateField("deliveryPeriod", dp);
+                          }}
+                          placeholder="HH:MM"
+                          minWidth="100%"
+                        />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="วันหมดอายุ" required />
+                        <ThaiDateInput
+                          value={form.deliveryPeriod?.[0]?.startDelivery2 || ""}
+                          onChange={() => {}}
+                          placeholder="DD/MM/YY"
+                          disabled
+                        />
+                      </Box>
+                      <Box>
+                        <FieldLabel label="เวลา" required />
+                        <ThaiTimeInput
+                          value={form.deliveryPeriod?.[0]?.endDelivery2 || ""}
+                          onChange={() => {}}
+                          placeholder="HH:MM"
+                          minWidth="100%"
+                          disabled
+                        />
+                      </Box>
+                    </Box>
+                  )}
                 </Box>
               )}
 

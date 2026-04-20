@@ -1508,40 +1508,50 @@ function RequestReferOutDetailPageInner() {
                 }
               />
               <Box sx={{ p: 2 }}>
-                {/* Delivery period — ข้อมูลวันและเวลา (matches Nuxt referral-info-ipd.vue) */}
-                {deliveryPeriods.length > 0 && (
-                  <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1, mb: 2 }}>
-                    <Box sx={{ borderBottom: "1px solid #E5E7EB", px: 2, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ข้อมูลวันและเวลา</Typography>
-                    </Box>
-                    <Box sx={{ p: 2 }}>
-                      {deliveryPeriods.map((period: any, idx: number) => (
-                        <Box key={idx}>
-                          {doc.referralDeliveryPeriod?.name && (
-                            <Typography sx={{ fontWeight: 700, mb: 1, p: "8px" }}>{doc.referralDeliveryPeriod.name}</Typography>
-                          )}
-                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                            <Box>
-                              <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>วันที่เริ่มต้น</Typography>
-                              <Typography sx={{
-                                fontWeight: 700, fontSize: "0.95rem",
-                                bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
-                                borderRadius: "4px 0 0 4px", p: "12px",
-                              }}>
-                                {fmtDateThaiDirect(period.endDelivery)}
-                              </Typography>
+                {/* Delivery period — matches Nuxt:
+                    - referral-info-ipd.vue (IPD/ER on /refer-out) → bordered card, "ข้อมูลวันและเวลา", 2 cols, yellow bg
+                    - referral-request-info.vue / referral-info.vue → "ระยะเวลารับรองสิทธิ์", 4 cols, กรุณาใช้สิทธิ์ */}
+                {deliveryPeriods.length > 0 && (() => {
+                  const isIPDorERRoute = isReferOutRoute && (referralKindText === "IPD" || referralKindText === "EMERGENCY");
+                  const periodId = doc.referralDeliveryPeriod?.id;
+
+                  if (isIPDorERRoute) {
+                    /* ── IPD/ER on /refer-out → referral-info-ipd.vue style ── */
+                    return (
+                      <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1, mb: 2 }}>
+                        <Box sx={{ borderBottom: "1px solid #E5E7EB", px: 2, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ข้อมูลวันและเวลา</Typography>
+                        </Box>
+                        <Box sx={{ p: 2 }}>
+                          {deliveryPeriods.map((period: any, idx: number) => (
+                            <Box key={idx}>
+                              {doc.referralDeliveryPeriod?.name && (
+                                <Typography sx={{ fontWeight: 700, mb: 1, p: "8px" }}>{doc.referralDeliveryPeriod.name}</Typography>
+                              )}
+                              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>วันที่เริ่มต้น</Typography>
+                                  <Typography sx={{
+                                    fontWeight: 700, fontSize: "0.95rem",
+                                    bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
+                                    borderRadius: "4px 0 0 4px", p: "12px",
+                                  }}>
+                                    {fmtDateThaiDirect(period.endDelivery)}
+                                  </Typography>
+                                </Box>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>เวลา</Typography>
+                                  <Typography sx={{
+                                    fontWeight: 700, fontSize: "0.95rem",
+                                    bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
+                                    borderRadius: "4px 0 0 4px", p: "12px",
+                                  }}>
+                                    {fmtTimeDirect(period.endDelivery)}
+                                  </Typography>
+                                </Box>
+                              </Box>
                             </Box>
-                            <Box>
-                              <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>เวลา</Typography>
-                              <Typography sx={{
-                                fontWeight: 700, fontSize: "0.95rem",
-                                bgcolor: "#FEFCE8", borderLeft: "4px solid #FEFCE8",
-                                borderRadius: "4px 0 0 4px", p: "12px",
-                              }}>
-                                {fmtTimeDirect(period.endDelivery)}
-                              </Typography>
-                            </Box>
-                          </Box>
+                          ))}
                           {/* ตอบรับภายในวันที่ */}
                           {doc.isEndAccept && (
                             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 2 }}>
@@ -1551,17 +1561,80 @@ function RequestReferOutDetailPageInner() {
                               </Box>
                               <Box>
                                 <Typography sx={{ fontSize: "0.875rem", color: "#374151", mb: "4px" }}>เวลา</Typography>
-                                <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                                  {fmtTimeDirect(doc.endAccept)}
-                                </Typography>
+                                <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>{fmtTimeDirect(doc.endAccept)}</Typography>
                               </Box>
                             </Box>
                           )}
                         </Box>
-                      ))}
+                      </Box>
+                    );
+                  }
+
+                  /* ── OPD / request-refer-out → referral-request-info.vue / referral-info.vue style ── */
+                  return (
+                    <Box sx={{ mb: 2 }}>
+                      <Box sx={{ borderBottom: "2px solid #00AF75", pb: 1, mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ระยะเวลารับรองสิทธิ์</Typography>
+                      </Box>
+                      <Box sx={{ p: 2 }}>
+                        {deliveryPeriods.map((period: any, idx: number) => (
+                          <Box key={idx}>
+                            <Typography sx={{ fontWeight: 700, mb: 1 }}>
+                              รูปแบบ: {doc.referralDeliveryPeriod?.name || "-"}
+                            </Typography>
+                            {periodId === 1 ? (
+                              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่เริ่มต้น</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(period.endDelivery)}</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลา</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.endDelivery)}</Typography>
+                                </Box>
+                              </Box>
+                            ) : (
+                              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่เริ่มต้น</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(period.startDelivery || period.endDelivery)}</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลาเริ่มต้น</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.startDelivery || period.endDelivery)} น.</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่สิ้นสุด</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(period.endDelivery)}</Typography>
+                                </Box>
+                                <Box>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลาสิ้นสุด</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.endDelivery)} น.</Typography>
+                                </Box>
+                              </Box>
+                            )}
+                          </Box>
+                        ))}
+                        {/* ตอบรับภายในวันที่ */}
+                        {doc.isEndAccept && (
+                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 2 }}>
+                            <Box>
+                              <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>ตอบรับภายในวันที่</Typography>
+                              <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(doc.endAccept)}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลา</Typography>
+                              <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(doc.endAccept)}</Typography>
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                      <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", mt: 1 }}>
+                        กรุณาใช้สิทธิ์การรักษาตามระยะเวลาดังกล่าว
+                      </Typography>
                     </Box>
-                  </Box>
-                )}
+                  );
+                })()}
 
                 {/* ข้อมูลสถานพยาบาล — matches Nuxt referral-info-ipd.vue labels */}
                 {(() => {

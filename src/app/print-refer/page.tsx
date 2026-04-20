@@ -5,24 +5,38 @@ import { useSearchParams } from "next/navigation";
 import { useReferralStore } from "@/stores/referralStore";
 import { useAuthStore } from "@/stores/authStore";
 
-/* ── helpers ── */
-function fmtDateThai(d: any) {
-  if (!d) return "-";
+/* ── helpers — matches Nuxt formatStartDateThai / formatEndTime (string parsing, no timezone issues) ── */
+function fmtDateThai(d: any): string {
+  if (!d || typeof d !== "string") return "-";
   try {
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return String(d);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = date.getFullYear() + 543;
-    return `${dd}/${mm}/${yyyy}`;
-  } catch { return String(d); }
+    // Extract date part from ISO string "2026-04-19T00:00:00.000Z" → "2026-04-19"
+    const dateStr = d.includes("T") ? d.split("T")[0] : d;
+    if (!dateStr) return "-";
+    const [year, month, day] = dateStr.split("-").map(Number);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return "-";
+    if (month < 1 || month > 12 || day < 1 || day > 31) return "-";
+    const buddhistYear = year + 543;
+    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${buddhistYear}`;
+  } catch { return "-"; }
 }
-function fmtTimeThai(d: any) {
-  if (!d) return "-";
+function fmtTimeThai(d: any): string {
+  if (!d || typeof d !== "string") return "-";
   try {
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return "-";
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    // Extract time from ISO string "2026-04-19T17:30:00.000Z" → "17:30:00"
+    if (d.includes("T")) {
+      const timePart = d.split("T")[1];
+      if (timePart) {
+        const clean = timePart.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
+        // Match HH:MM:SS or HH:MM
+        const m = clean.match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (m) return `${m[1]}:${m[2]}:${m[3] || "00"}`;
+      }
+    }
+    // Plain time string "10:00:00"
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(d)) {
+      return d.split(":").length === 3 ? d : d + ":00";
+    }
+    return "-";
   } catch { return "-"; }
 }
 function calcAge(birthday: string | undefined | null): string {

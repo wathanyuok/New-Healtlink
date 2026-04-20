@@ -33,6 +33,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import BreadcrumbsRefer from "@/components/referral-create/BreadcrumbsRefer";
 import DeliveryPointSelector from "@/components/referral-create/DeliveryPointSelector";
 import DoctorBranchSelector from "@/components/referral-create/DoctorBranchSelector";
+import RequestReferralFormComponent from "@/components/referral-create/RequestReferralForm";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
 import {
   useReferralCreateStore,
@@ -82,6 +83,8 @@ function OPDReferralInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [sendData, setSendData] = useState(false);
   const [patientInfo, setPatientInfo] = useState<{ firstname?: string; lastname?: string } | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [draftLoaded, setDraftLoaded] = useState(0);
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -277,25 +280,46 @@ function OPDReferralInner() {
     return pages;
   }, [page, totalPages]);
 
-  // Breadcrumbs
+  // Breadcrumbs — always show all 5 steps like Nuxt
   const breadcrumbItems = useMemo(() => {
-    const items: { name: string; path?: string; isActive?: boolean }[] = [
-      { name: "สร้างใบส่งตัว", path: "/create" },
-      { name: "เลือกสถานพยาบาลปลายทาง", path: `/create/opd?kind=${kind}`, isActive: !hospitalParam },
+    // Determine current step index (0-based)
+    let currentStep = 0; // step 1: เลือกสถานพยาบาล
+    if (hospitalParam && deliveryPointParam && !doctorBranchParam) currentStep = 1; // step 2: เลือกปลายทางจุดรับใบส่งตัว
+    if (hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam) currentStep = 2; // step 3: กำหนดสาขา/แผนกที่จะส่งไป
+    if (branchNamesParam) currentStep = 3; // step 4: เพิ่มรายละเอียดใบส่งตัว
+
+    const baseQueryHospital = hospitalParam ? buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "" }) : "";
+    const baseQueryDelivery = hospitalParam ? buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "", deliveryPoint: "true" }) : "";
+    const baseQueryBranch = hospitalParam ? buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "", deliveryPoint: "true", docter_branch: "true" }) : "";
+
+    const allSteps = [
+      {
+        name: "สร้างใบส่งตัว",
+        path: "/create",
+      },
+      {
+        name: "เลือกสถานพยาบาล",
+        path: `/create/opd?kind=${kind}`,
+        isActive: currentStep === 0,
+      },
+      {
+        name: "เลือกปลายทางจุดรับใบส่งตัว",
+        path: currentStep > 1 ? `/create/opd?${baseQueryHospital}` : undefined,
+        isActive: currentStep === 1,
+      },
+      {
+        name: "กำหนดสาขา/แผนกที่จะส่งไป",
+        path: currentStep > 2 ? `/create/opd?${baseQueryDelivery}` : undefined,
+        isActive: currentStep === 2,
+      },
+      {
+        name: "เพิ่มรายละเอียดใบส่งตัว",
+        path: undefined,
+        isActive: currentStep === 3,
+      },
     ];
-    if (hospitalParam && !deliveryPointParam) {
-      items.push({ name: "เลือกจุดส่งต่อ", isActive: true });
-    }
-    if (deliveryPointParam && doctorBranchParam && !branchNamesParam) {
-      items.push({ name: "เลือกจุดส่งต่อ", path: `/create/opd?${buildQuery({ hospital: hospitalParam!, hospitalID: hospitalIDParam || "" })}` });
-      items.push({ name: "เลือกสาขา/แผนก", isActive: true });
-    }
-    if (branchNamesParam) {
-      items.push({ name: "เลือกจุดส่งต่อ", path: `/create/opd?${buildQuery({ hospital: hospitalParam!, hospitalID: hospitalIDParam || "" })}` });
-      items.push({ name: "เลือกสาขา/แผนก", path: `/create/opd?${buildQuery({ hospital: hospitalParam!, hospitalID: hospitalIDParam || "", deliveryPoint: "true", docter_branch: "true" })}` });
-      items.push({ name: "เพิ่มรายละเอียดใบส่งตัว", isActive: true });
-    }
-    return items;
+
+    return allSteps;
   }, [kind, hospitalParam, hospitalIDParam, deliveryPointParam, doctorBranchParam, branchNamesParam, buildQuery]);
 
   // Action buttons for form step
@@ -382,6 +406,11 @@ function OPDReferralInner() {
                     if (!v) return <span style={{ color: "#9ca3af" }}>เลือกโซนสถานพยาบาล</span>;
                     return hospitalZones.find((z) => z.value === v)?.name || v;
                   }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: { maxHeight: 350, minWidth: 320 },
+                    },
+                  }}
                 >
                   <MenuItem value="">ทั้งหมด</MenuItem>
                   {hospitalZones.map((z) => (
@@ -404,6 +433,11 @@ function OPDReferralInner() {
                   renderValue={(v) => {
                     if (!v) return <span style={{ color: "#9ca3af" }}>เลือกประเภทสถานพยาบาล</span>;
                     return hospitalTypes.find((t) => String(t.id) === v)?.name || v;
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: { maxHeight: 350, minWidth: 320 },
+                    },
                   }}
                 >
                   <MenuItem value="">ทั้งหมด</MenuItem>
@@ -609,12 +643,19 @@ function OPDReferralInner() {
           onBack={() => router.push(`/create/opd?${buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "", deliveryPoint: "true" })}`)} />
       )}
 
-      {/* Step 4: Referral Form */}
+      {/* Step 4: Referral Form — reuse the full RequestReferralForm component (matching Nuxt layout) */}
       {isFormStep && (
         <Box sx={{ mt: 3 }}>
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <OPDReferralForm kind={kind} hospitalName={hospitalParam || ""} branchNames={branchNamesParam || ""} formData={formData} onUpdate={updateFormData} />
-          </Paper>
+          <RequestReferralFormComponent
+            kind={kind}
+            hospitalName={hospitalParam || ""}
+            branchNames={branchNamesParam || ""}
+            searchParams={Object.fromEntries(searchParams.entries())}
+            formData={formData}
+            onUpdate={updateFormData}
+            formErrors={formErrors}
+            draftLoaded={draftLoaded}
+          />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>
             <ActionButtons />
@@ -625,74 +666,7 @@ function OPDReferralInner() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  OPD Referral Form                                                  */
-/* ------------------------------------------------------------------ */
-
-interface OPDFormProps { kind: string; hospitalName: string; branchNames: string; formData: Record<string, any>; onUpdate: (partial: Record<string, any>) => void; }
-
-function OPDReferralForm({ kind, hospitalName, branchNames, formData, onUpdate }: OPDFormProps) {
-  return (
-    <Box>
-      <Box sx={{ mb: 3, p: 2, bgcolor: "#f0fdf4", borderRadius: 2 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>สถานพยาบาลปลายทาง: {hospitalName}</Typography>
-        <Typography variant="body2" sx={{ color: "#6b7280" }}>สาขา/แผนก: {branchNames}</Typography>
-      </Box>
-      <SectionTitle title="1. ข้อมูลผู้ป่วย" />
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }, gap: 2, mb: 3 }}>
-        <FormField label="เลขบัตรประชาชน *" value={formData.patient_pid || ""} onChange={(v) => onUpdate({ patient_pid: v })} placeholder="กรอกเลขบัตรประชาชน 13 หลัก" />
-        <FormField label="HN" value={formData.patient_hn || ""} onChange={(v) => onUpdate({ patient_hn: v })} />
-        <FormField label="VN" value={formData.patient_vn || ""} onChange={(v) => onUpdate({ patient_vn: v })} />
-        <FormField label="คำนำหน้า" value={formData.patient_prefix || ""} onChange={(v) => onUpdate({ patient_prefix: v })} />
-        <FormField label="ชื่อ" value={formData.patient_firstname || ""} onChange={(v) => onUpdate({ patient_firstname: v })} />
-        <FormField label="นามสกุล" value={formData.patient_lastname || ""} onChange={(v) => onUpdate({ patient_lastname: v })} />
-        <FormField label="วันเกิด" value={formData.patient_birthday || ""} onChange={(v) => onUpdate({ patient_birthday: v })} type="date" />
-      </Box>
-      <SectionTitle title="2. ข้อมูลการส่งตัว" />
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, mb: 3 }}>
-        <FormField label="ระยะเวลาการรับรอง" value={formData.certificationPeriod || ""} onChange={(v) => onUpdate({ certificationPeriod: v })} />
-        <FormField label="วันที่เริ่ม" value={formData.startDate || ""} onChange={(v) => onUpdate({ startDate: v })} type="date" />
-        <FormField label="เวลาเริ่ม" value={formData.startTime || ""} onChange={(v) => onUpdate({ startTime: v })} type="time" />
-        <FormField label="จุดสร้างใบส่งตัว" value={formData.referralCreationPoint || ""} onChange={(v) => onUpdate({ referralCreationPoint: v })} />
-        <FormField label="แพทย์ผู้สั่ง" value={formData.prescribingDoctor || ""} onChange={(v) => onUpdate({ prescribingDoctor: v })} />
-      </Box>
-      <SectionTitle title="3. สาเหตุการส่งตัว" />
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, mb: 3 }}>
-        <FormField label="สาเหตุการส่งตัว *" value={formData.referralCause || ""} onChange={(v) => onUpdate({ referralCause: v })} />
-        <FormField label="ระดับความเร่งด่วน *" value={formData.levelOfUrgency || ""} onChange={(v) => onUpdate({ levelOfUrgency: v })} />
-      </Box>
-      <SectionTitle title="4. อาการและการวินิจฉัย" />
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2, mb: 3 }}>
-        <FormField label="อาการสำคัญ *" value={formData.visit_primary_symptom_main_symptom || ""} onChange={(v) => onUpdate({ visit_primary_symptom_main_symptom: v })} multiline rows={3} />
-        <FormField label="ประวัติการเจ็บป่วยปัจจุบัน *" value={formData.visit_primary_symptom_current_illness || ""} onChange={(v) => onUpdate({ visit_primary_symptom_current_illness: v })} multiline rows={3} />
-        <FormField label="PE *" value={formData.pe || ""} onChange={(v) => onUpdate({ pe: v })} multiline rows={3} />
-        <FormField label="Imp *" value={formData.Imp || ""} onChange={(v) => onUpdate({ Imp: v })} multiline rows={2} />
-      </Box>
-      <SectionTitle title="5. การรักษาและข้อมูลเพิ่มเติม" />
-      <Box sx={{ mb: 3 }}><FormField label="การรักษา" value={formData.treatment || ""} onChange={(v) => onUpdate({ treatment: v })} multiline rows={3} /></Box>
-    </Box>
-  );
-}
-
-/* ---- Shared UI ---- */
-function SectionTitle({ title }: { title: string }) {
-  return <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#036245", mb: 1.5, pb: 0.5, borderBottom: "2px solid #00AF75" }}>{title}</Typography>;
-}
-interface FormFieldProps { label: string; value: string; onChange: (val: string) => void; placeholder?: string; type?: string; multiline?: boolean; rows?: number; }
-function FormField({ label, value, onChange, placeholder, type = "text", multiline = false, rows }: FormFieldProps) {
-  return (
-    <Box>
-      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>{label}</Typography>
-      {multiline ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={rows || 3}
-          style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.875rem", fontFamily: "inherit", resize: "vertical" }} />
-      ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-          style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.875rem", fontFamily: "inherit" }} />
-      )}
-    </Box>
-  );
-}
+/* ---- (OPD now uses the shared RequestReferralForm component) ---- */
 
 /* ---- Page ---- */
 export default function OPDReferralPage() {

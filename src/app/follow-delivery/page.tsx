@@ -14,10 +14,10 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   AddCircleOutline as AddIcon,
-  HelpOutline as HelpIcon,
 } from "@mui/icons-material";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboardStore";
+import { useAuthStore } from "@/stores/authStore";
 
 /* ── Card header SVG icons matching the Nuxt originals ── */
 const ReferOutSvg = () => (
@@ -77,7 +77,6 @@ const IpdSvgIcon = () => (
     <path fill="#036245" d="M10.338 10.233a.66.66 0 0 1-.639-.048a.66.66 0 0 1-.296-.46l-.009-5.151a.667.667 0 0 1 1.333 0V8.57l3.416-1.609a.666.666 0 0 1 .566 1.204z"/>
   </svg>
 );
-/* ── Request topic icons (in-outpatient = walking person, inpatient-rounded = bed with arrow) ── */
 const InOutpatientSvgIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 64 64">
     <path fill="#036245" d="M29.905 11.078a5.225 5.225 0 0 0 5.616-4.789A5.23 5.23 0 0 0 30.725.673a5.22 5.22 0 0 0-5.614 4.792a5.22 5.22 0 0 0 4.794 5.614zm1.431 10.461a3.516 3.516 0 0 1 2.852 3.464a3.53 3.53 0 0 1-3.528 3.528H19.228a2.24 2.24 0 0 1-2.074-3.088l1.236-2.885l13.766-9.86h-6.559c-2.519-.07-4.289.805-5.304 2.789c-.688 1.335-4.342 9.498-4.342 9.498a3.528 3.528 0 0 0 3.278 4.836h4.465l-1.317 8.66l-6.93 20.026a3.37 3.37 0 1 0 6.402 2.113l7.969-22.59c1.554 2.525 4.647 7.051 5.173 7.906c.121 1.421 1.234 13.948 1.234 13.948a3.374 3.374 0 0 0 3.657 3.059a3.37 3.37 0 0 0 3.059-3.657l-1.31-14.743a3.3 3.3 0 0 0-.49-1.471l-5.729-9.285l.912-11.653s1.357 4.611 1.458 4.944c.291.952.947 1.635 1.62 2.18c.394.314 7.081 4.865 7.081 4.865c.372.172.676.323 1.075.35a2.35 2.35 0 0 0 2.533-2.158a2.37 2.37 0 0 0-.92-2.061s-6.663-4.575-6.934-4.774a1.4 1.4 0 0 1-.439-.61l-2.637-9.498c-.429-1.437-1.877-2.673-3.708-2.673h-.789z"/>
@@ -109,11 +108,11 @@ const TOOLTIP_CONTENT: Record<string, string> = {
     "จะแสดงจำนวนรายการใบส่งตัวแยกตามประเภท OPD, IPD, ER ที่มีสถานะ:\n• รอตอบรับ\nตัวเลขการแจ้งเตือนจะหายไปเมื่อกดเข้าดูข้อมูล",
   "แจ้งเตือน - การส่งตัวผู้ป่วยกลับ (Refer Back)":
     "จะแสดงจำนวนรายการใบส่งตัวแยกตามประเภท OPD, IPD, ER ที่ปลายทางได้อัพเดทข้อมูลมาเป็นสถานะ:\n• ยืนยันการส่งตัว\n• เปลี่ยนแปลงนัดหมาย\n• ยกเลิก\n• ปฏิเสธ\n• รับเข้ารักษา\nตัวเลขการแจ้งเตือนจะหายไปเมื่อกดเข้าดูข้อมูล",
-  "แจ้งเตือน - การรับผู้ป่วยกลับ (Refer Receive)":
+  "แจ้งเตือน - การรับผู้ป่วยกลับ":
     "จะแสดงจำนวนรายการใบส่งตัวแยกตามประเภท OPD, IPD, ER ที่มีสถานะ:\n• รอตอบรับ\nตัวเลขการแจ้งเตือนจะหายไปเมื่อกดเข้าดูข้อมูล",
-  "แจ้งเตือน - การร้องขอส่งตัวมา (Request Refer Out)":
+  "แจ้งเตือน - การร้องขอส่งตัวมา":
     "จะแสดงจำนวนรายการร้องขอส่งตัวที่มีสถานะ:\n• ปฏิเสธ\nตัวเลขการแจ้งเตือนจะหายไปเมื่อกดเข้าดูข้อมูล",
-  "แจ้งเตือน - คำร้องขอส่งตัวไป (Request Refer Back)":
+  "แจ้งเตือน - คำร้องขอส่งตัวไป":
     "จะแสดงจำนวนคำร้องขอส่งตัวที่มีสถานะ:\n• รอตอบรับ\nตัวเลขการแจ้งเตือนจะหายไปเมื่อกดเข้าดูข้อมูล",
 };
 
@@ -158,7 +157,7 @@ const ALERT_CARDS: AlertCardDef[] = [
     ],
   },
   {
-    title: "แจ้งเตือน - การรับผู้ป่วยกลับ (Refer Receive)",
+    title: "แจ้งเตือน - การรับผู้ป่วยกลับ",
     icon: <ReferReceiveSvg />,
     topics: [
       { name: "ผู้ป่วย OPD", description: "OPD", kind: "opd", monitorKeys: ["REFER_BACK_IN_OPD"], path: "/refer-receive/all?kind=opd" },
@@ -187,22 +186,33 @@ const ALERT_CARDS: AlertCardDef[] = [
 export default function FollowDeliveryPage() {
   const router = useRouter();
   const { getReferMonitor } = useDashboardStore();
+  const profile = useAuthStore((s) => s.profile);
+  const optionHospital = useAuthStore((s) => s.optionHospital);
   const [monitorData, setMonitorData] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchMonitorData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getReferMonitor({});
-      setMonitorData(data || {});
+      // Match Nuxt logic: send hospital param from auth profile
+      const idHospital = (profile?.permissionGroup as any)?.hospital?.id;
+      const excludedIds = optionHospital ?? idHospital;
+      const param: { hospital: number | null } = {
+        hospital: typeof excludedIds === "number" ? excludedIds : null,
+      };
+      const res = await getReferMonitor(param);
+      // apiGet returns response.data, Nuxt uses res.data (i.e. response.data.data)
+      const data = res?.data || res || {};
+      setMonitorData(data);
     } catch (err) {
       console.error("Failed to fetch refer monitor:", err);
       setMonitorData({});
     } finally {
       setLoading(false);
     }
-  }, [getReferMonitor]);
+  }, [getReferMonitor, profile, optionHospital]);
 
+  // Fetch on mount and re-fetch when optionHospital changes (matching Nuxt watch)
   useEffect(() => {
     fetchMonitorData();
   }, [fetchMonitorData]);
@@ -261,7 +271,7 @@ export default function FollowDeliveryPage() {
                 boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
               }}
             >
-              {/* Card Header */}
+              {/* Card Header — matches Nuxt green bar */}
               <Box
                 sx={{
                   bgcolor: "#036245",
@@ -302,13 +312,29 @@ export default function FollowDeliveryPage() {
                     },
                   }}
                 >
-                  <IconButton size="small" sx={{ color: "white" }}>
-                    <HelpIcon fontSize="small" />
+                  {/* Filled green circle "?" icon — matches Nuxt */}
+                  <IconButton size="small" sx={{ color: "white", p: 0 }}>
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        bgcolor: "rgba(255,255,255,0.25)",
+                        border: "2px solid white",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.85rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      ?
+                    </Box>
                   </IconButton>
                 </Tooltip>
               </Box>
 
-              {/* Card Body - Topic Items */}
+              {/* Card Body - Topic Items — matches Nuxt card-refer.vue */}
               <Box sx={{ p: 2, bgcolor: "#f5f5f5" }}>
                 <Grid container spacing={1.5}>
                   {card.topics.map((topic) => {
@@ -318,28 +344,52 @@ export default function FollowDeliveryPage() {
                     return (
                       <Grid item xs={isWide ? 6 : 6} sm={isWide ? 6 : 4} key={topic.name}>
                         <Card
-                          onClick={() => router.push(topic.path)}
+                          onClick={() => {
+                            // Nuxt: prevent navigation when count = 0
+                            if (hasAlert) router.push(topic.path);
+                          }}
                           sx={{
                             p: 1.5,
-                            cursor: "pointer",
-                            bgcolor: hasAlert ? "#e8f5e9" : "#eeeeee",
-                            border: "1px solid",
-                            borderColor: hasAlert ? "#a5d6a7" : "#e0e0e0",
-                            borderRadius: 2,
+                            cursor: hasAlert ? "pointer" : "default",
+                            // Nuxt: bg-white when hasAlert, bg-gray-50 when 0
+                            bgcolor: hasAlert ? "#fff" : "#f0f0f0",
+                            borderRadius: "16px",
+                            boxShadow: "0px 10px 8px rgba(0, 0, 0, 0.04), 0px 4px 3px rgba(0, 0, 0, 0.1)",
                             transition: "all 0.2s",
-                            "&:hover": { bgcolor: hasAlert ? "#c8e6c9" : "#e0e0e0", boxShadow: 2 },
+                            "&:hover": hasAlert
+                              ? { bgcolor: "#dcfce7" }
+                              : {},
                             display: "flex",
                             alignItems: "center",
                             gap: 1.5,
-                            minHeight: 64,
+                            minHeight: 80,
                           }}
                         >
-                          <TopicIcon kind={topic.kind} />
+                          <Box sx={{ flexShrink: 0, color: "#036245" }}>
+                            <TopicIcon kind={topic.kind} />
+                          </Box>
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" fontWeight={600} noWrap>
+                            <Typography
+                              sx={{
+                                fontSize: "0.875rem",
+                                fontWeight: 700,
+                                color: hasAlert ? "#000" : "#9ca3af",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
                               {topic.name}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography
+                              sx={{
+                                fontSize: "0.75rem",
+                                color: hasAlert ? "#6b7280" : "#9ca3af",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
                               {topic.description}
                             </Typography>
                           </Box>
@@ -348,16 +398,17 @@ export default function FollowDeliveryPage() {
                           ) : (
                             <Box
                               sx={{
-                                width: 32,
-                                height: 32,
+                                width: 28,
+                                height: 28,
                                 borderRadius: "50%",
-                                bgcolor: hasAlert ? "#036245" : "#036245",
+                                // Nuxt: bg-[#EF4444] when hasAlert, bg-gray-80 when 0
+                                bgcolor: hasAlert ? "#EF4444" : "#9ca3af",
                                 color: "white",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontWeight: 700,
-                                fontSize: "0.85rem",
+                                fontWeight: 600,
+                                fontSize: "0.8rem",
                                 flexShrink: 0,
                               }}
                             >
