@@ -965,7 +965,13 @@ export default function RequestReferralForm({
                   <RadioGroup
                     row
                     value={String(form.certificationPeriod)}
-                    onChange={(e) => updateField("certificationPeriod", Number(e.target.value))}
+                    onChange={(e) => {
+                      const newVal = Number(e.target.value);
+                      // Match Nuxt: clear deliveryPeriod when radio changes, then add fresh empty entry
+                      const freshDP = { startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" };
+                      updateField("certificationPeriod", newVal);
+                      updateField("deliveryPeriod", [freshDP]);
+                    }}
                     sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" }, gap: 1, mb: 2 }}
                   >
                     {[
@@ -1096,30 +1102,44 @@ export default function RequestReferralForm({
                           onChange={(val) => {
                             const dp = [...(form.deliveryPeriod || [{ startDelivery: "", endDelivery: "", startDelivery2: "", endDelivery2: "" }])];
                             dp[0] = { ...dp[0], startDelivery: val };
-                            // Auto-calculate end date based on period
+                            // Auto-calculate end date based on period (matching Nuxt logic)
                             if (val) {
                               try {
-                                const parts = val.includes("T") ? val.split("T")[0].split("-") : val.split("-");
-                                const startDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                                const startDate = new Date(val);
                                 if (!isNaN(startDate.getTime())) {
                                   const endDate = new Date(startDate);
                                   const period = Number(form.certificationPeriod);
-                                  if (period === 3) endDate.setMonth(endDate.getMonth() + 1);
-                                  else if (period === 4) endDate.setMonth(endDate.getMonth() + 3);
-                                  else if (period === 5) endDate.setMonth(endDate.getMonth() + 6);
-                                  else if (period === 6) endDate.setFullYear(endDate.getFullYear() + 1);
-                                  else if (period === 7) {
-                                    const fiscalYearEnd = startDate.getMonth() >= 9
-                                      ? new Date(startDate.getFullYear() + 1, 8, 30)
-                                      : new Date(startDate.getFullYear(), 8, 30);
-                                    endDate.setTime(fiscalYearEnd.getTime());
+                                  switch (period) {
+                                    case 3: endDate.setMonth(endDate.getMonth() + 1); break;
+                                    case 4: endDate.setMonth(endDate.getMonth() + 3); break;
+                                    case 5: endDate.setMonth(endDate.getMonth() + 6); break;
+                                    case 6: endDate.setFullYear(endDate.getFullYear() + 1); break;
+                                    case 7: {
+                                      // สิ้นสุดปีงบ = 30 กันยายน
+                                      const currentYear = startDate.getFullYear();
+                                      const sept30 = new Date(currentYear, 8, 30);
+                                      if (startDate <= sept30) {
+                                        endDate.setTime(sept30.getTime());
+                                      } else {
+                                        endDate.setTime(new Date(currentYear + 1, 8, 30).getTime());
+                                      }
+                                      break;
+                                    }
+                                    default: endDate.setMonth(endDate.getMonth() + 1);
                                   }
-                                  const y = endDate.getFullYear();
-                                  const m = String(endDate.getMonth() + 1).padStart(2, "0");
-                                  const d = String(endDate.getDate()).padStart(2, "0");
-                                  dp[0].startDelivery2 = `${y}-${m}-${d}`;
+                                  // Handle month overflow (e.g. Jan 31 + 1 month)
+                                  if (period !== 7 && endDate.getDate() !== startDate.getDate()) {
+                                    endDate.setDate(0); // last day of previous month
+                                  }
+                                  // Use local date string to avoid timezone shift (toISOString converts to UTC)
+                                  const yy = endDate.getFullYear();
+                                  const mm2 = String(endDate.getMonth() + 1).padStart(2, "0");
+                                  const dd2 = String(endDate.getDate()).padStart(2, "0");
+                                  dp[0].startDelivery2 = `${yy}-${mm2}-${dd2}`;
                                 }
                               } catch { /* ignore */ }
+                            } else {
+                              dp[0].startDelivery2 = "";
                             }
                             updateField("deliveryPeriod", dp);
                           }}
