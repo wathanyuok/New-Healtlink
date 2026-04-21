@@ -66,26 +66,13 @@ export default function Navbar() {
     }
   }, [storeOptionHospital, hospitals]);
 
-  // Auto-set optionHospital in store when hospitals load
-  // Match Nuxt: auto-select first hospital if nothing is selected
+  // Sync selectedHospital with store when hospitals load (only if already selected)
   useEffect(() => {
-    if (hospitals.length > 0) {
-      if (selectedHospital) {
-        const h = hospitals.find((h: any) => String(h.id) === selectedHospital || h.code === selectedHospital);
-        if (h) {
-          setSelectedHospital(String(h.id));
-          setOptionHospital(h.id);
-        } else {
-          // Not found by id/code, select first hospital
-          const first = hospitals[0];
-          setSelectedHospital(String(first.id));
-          setOptionHospital(first.id);
-        }
-      } else {
-        // No hospital selected yet — auto-select first one (matching Nuxt behavior)
-        const first = hospitals[0];
-        setSelectedHospital(String(first.id));
-        setOptionHospital(first.id);
+    if (hospitals.length > 0 && selectedHospital) {
+      const h = hospitals.find((h: any) => String(h.id) === selectedHospital || h.code === selectedHospital);
+      if (h) {
+        setSelectedHospital(String(h.id));
+        setOptionHospital(h.id);
       }
     }
   }, [hospitals]);

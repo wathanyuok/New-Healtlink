@@ -1151,10 +1151,10 @@ export default function ReferListLayout({
           deliveryPoint: item.deliveryPointTypeStart?.id ? "true" : "false",
           docter_branch: appointmentData ? "true" : "false",
           branch_ids: hasBranches
-            ? appointmentData.map((a: any) => a.doctorBranch).join(", ")
+            ? appointmentData.map((a: any) => typeof a.doctorBranch === "object" ? a.doctorBranch?.id : a.doctorBranch).join(", ")
             : "",
           branch_names: hasBranches
-            ? appointmentData.map((a: any) => a.doctorBranchName).join(", ")
+            ? appointmentData.map((a: any) => a.doctorBranchName || a.doctorBranch?.name || "").join(", ")
             : "ไม่ระบุสาขา",
           branch_type: hasBranches
             ? appointmentData.map((a: any) => a.appointmentType).join(", ")
@@ -1173,14 +1173,25 @@ export default function ReferListLayout({
         (pathname === "/refer-out/all" || pathname === "/refer-back/all") &&
         kindName === "OPD"
       ) {
+        const appointmentData = item.appointmentData;
+        const hasBranches = Array.isArray(appointmentData) && appointmentData.length > 0;
+        const referPointId = (pathname === "/refer-out/all"
+          ? item.deliveryPointTypeEnd?.id
+          : item.deliveryPointTypeStart?.id
+        )?.toString() || "";
         const q = new URLSearchParams({
           kind: pathname === "/refer-out/all" ? "referOut" : "referBack",
           hospital: item.toHospital?.name || "",
           hospitalID: item.toHospital?.id?.toString() || "",
-          referPoint: (pathname === "/refer-out/all"
-            ? item.deliveryPointTypeEnd?.id
-            : item.deliveryPointTypeStart?.id
-          )?.toString() || "",
+          referPoint: referPointId,
+          deliveryPoint: referPointId ? "true" : "false",
+          docter_branch: hasBranches ? "true" : "false",
+          branch_ids: hasBranches
+            ? appointmentData.map((a: any) => typeof a.doctorBranch === "object" ? a.doctorBranch?.id : a.doctorBranch).join(", ")
+            : "",
+          branch_names: hasBranches
+            ? appointmentData.map((a: any) => a.doctorBranchName || a.doctorBranch?.name || "").join(", ")
+            : "ไม่ระบุสาขา",
           draft: JSON.stringify({ id: item.id }),
         });
         router.push(`/create/opd?${q.toString()}`);
@@ -1199,10 +1210,10 @@ export default function ReferListLayout({
           deliveryPoint: item.deliveryPointTypeStart?.id ? "true" : "false",
           docter_branch: appointmentData ? "true" : "false",
           branch_ids: hasBranches
-            ? appointmentData.map((a: any) => a.doctorBranch).join(", ")
+            ? appointmentData.map((a: any) => typeof a.doctorBranch === "object" ? a.doctorBranch?.id : a.doctorBranch).join(", ")
             : "",
           branch_names: hasBranches
-            ? appointmentData.map((a: any) => a.doctorBranchName).join(", ")
+            ? appointmentData.map((a: any) => a.doctorBranchName || a.doctorBranch?.name || "").join(", ")
             : "ไม่ระบุสาขา",
           branch_type: hasBranches
             ? appointmentData.map((a: any) => a.appointmentType).join(", ")
