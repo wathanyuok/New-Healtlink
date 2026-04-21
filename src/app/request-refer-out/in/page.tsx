@@ -26,6 +26,7 @@ import {
   TextField,
   Snackbar,
   Alert,
+  Tooltip,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
@@ -39,6 +40,7 @@ const EpEditIcon = ({ size = 22, color = "currentColor" }: { size?: number; colo
   </svg>
 );
 import CloseIcon from "@mui/icons-material/Close";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import Image from "next/image";
 import { useReferralStore } from "@/stores/referralStore";
 import { useHospitalStore } from "@/stores/hospitalStore";
@@ -77,7 +79,7 @@ function fmtDateOnly(d: any) {
   }
 }
 
-/** Format ISO date string directly (no new Date()) to dd/mm/YYYY+543 — matches Nuxt formatStartDateThai */
+/** Format ISO date string directly (no new Date()) to dd/mm/YYYY+543 */
 function fmtDateThaiDirect(d: any): string {
   if (!d || typeof d !== "string") return "-";
   try {
@@ -88,7 +90,7 @@ function fmtDateThaiDirect(d: any): string {
   } catch { return "-"; }
 }
 
-/** Extract time from ISO string directly (no timezone conversion) — matches Nuxt formatEndTime */
+/** Extract time from ISO string directly (no timezone conversion) */
 function fmtTimeDirect(d: any): string {
   if (!d || typeof d !== "string") return "-";
   try {
@@ -103,7 +105,7 @@ function fmtTimeDirect(d: any): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Status badge classes (matching Nuxt)                               */
+/*  Status badge classes                                */
 /* ------------------------------------------------------------------ */
 function getCountBadgeClasses(name: string): { bgcolor: string; color: string } {
   if (!name) return { bgcolor: "#f3f4f6", color: "#6b7280" };
@@ -118,7 +120,7 @@ function getCountBadgeClasses(name: string): { bgcolor: string; color: string } 
   return { bgcolor: "#f3f4f6", color: "#6b7280" };
 }
 
-/* Status text color — matches Nuxt getCountTextClasses */
+/* Status text color */
 function getStatusTextColor(name: string): string {
   if (name === "ยกเลิก") return "#EF4444";
   if (name === "ยืนยันนัดหมาย") return "#3B82F6";
@@ -141,7 +143,7 @@ function getStatusBgColor(status: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Section header (green bg like Nuxt)                                */
+/*  Section header (green bg like original)                                */
 /* ------------------------------------------------------------------ */
 function SectionHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
@@ -219,7 +221,7 @@ function calculateAge(birthday: string | undefined | null): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Life status options (matches Nuxt lifeStatusOption)                 */
+/*  Life status options                  */
 /* ------------------------------------------------------------------ */
 const LIFE_STATUS_OPTIONS = [
   { value: "มีชีวิต", text: "มีชีวิต", color: "#00AF75" },
@@ -235,7 +237,7 @@ interface LifeStatusLog {
 }
 
 /* ------------------------------------------------------------------ */
-/*  LifeStatusModal — matches Nuxt modalStatusLife.vue                 */
+/*  LifeStatusModal */
 /* ------------------------------------------------------------------ */
 function LifeStatusModal({
   open,
@@ -253,7 +255,7 @@ function LifeStatusModal({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<{ status?: string; note?: string }>({});
 
-  // Populate form with latest log entry when modal opens (matches Nuxt setLatestLogToFields)
+  // Populate form with latest log entry when modal opens 
   useEffect(() => {
     if (open && logs.length > 0) {
       const latest = [...logs].reverse()[0];
@@ -309,7 +311,7 @@ function LifeStatusModal({
       fullWidth
       PaperProps={{ sx: { borderRadius: "8px", overflow: "hidden" } }}
     >
-      {/* Green header — matches Nuxt */}
+      {/* Green header */}
       <Box sx={{
         bgcolor: "#00AF75",
         px: "24px",
@@ -411,7 +413,7 @@ function LifeStatusModal({
           />
         </Box>
 
-        {/* Log history info — matches Nuxt */}
+        {/* Log history info */}
         <Box sx={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
@@ -438,7 +440,7 @@ function LifeStatusModal({
         </Box>
       </DialogContent>
 
-      {/* Footer buttons — matches Nuxt */}
+      {/* Footer buttons */}
       <Box sx={{
         px: "24px",
         py: "16px",
@@ -485,7 +487,7 @@ function LifeStatusModal({
 }
 
 /* ------------------------------------------------------------------ */
-/*  PatientInfoSection — matches Nuxt patient-info.vue                 */
+/*  PatientInfoSection */
 /* ------------------------------------------------------------------ */
 function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
   const [showAddress, setShowAddress] = React.useState(true);
@@ -512,9 +514,9 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
           <InfoField label="นามสกุล" value={patient.patient_lastname} />
         </Box>
 
-        {/* Image row: profile image + sex/birthday + blood group/age — Nuxt: grid-cols-3 equal */}
+        {/* Image row: profile image + sex/birthday + blood group/age */}
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, p: 1, mb: 1 }}>
-          {/* Column 1: Profile image — Nuxt: w-[250px] h-[150px] but shrinks to fit column */}
+          {/* Column 1: Profile image */}
           <Box sx={{ display: "flex", justifyContent: "center" }}>
             <Box
               component="label"
@@ -560,13 +562,13 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
           <InfoField label="VN ล่าสุด" value={doc.VN} />
         </Box>
 
-        {/* สิทธิ์การรักษา / สิทธิ์สถานพยาบาล — 2 columns (Nuxt: patient_treatment / patient_treatment_hospital) */}
+        {/* สิทธิ์การรักษา / สิทธิ์สถานพยาบาล — 2 columns  */}
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 1 }}>
           <InfoField label="สิทธิ์การรักษา" value={patient.patient_treatment || patient.patient_right || doc.data?.patient?.patient_treatment || doc.data?.patient?.patient_right} />
           <InfoField label="สิทธิ์สถานพยาบาล" value={patient.patient_treatment_hospital || patient.patient_hospital_right || doc.data?.patient?.patient_treatment_hospital || doc.data?.patient?.patient_hospital_right} />
         </Box>
 
-        {/* ── ที่อยู่ผู้ป่วย — collapsible (matches Nuxt patient-info.vue) ── */}
+        {/* ── ที่อยู่ผู้ป่วย — collapsible  ── */}
         <Box
           onClick={() => setShowAddress(!showAddress)}
           sx={{ borderBottom: "1px solid #CBD5E1", display: "flex", alignItems: "center", justifyContent: "space-between", p: 2, cursor: "pointer" }}
@@ -628,7 +630,7 @@ function PatientInfoSection({ patient, doc }: { patient: any; doc: any }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CancelReferralModal — matches Nuxt modalSubmitPatient.vue          */
+/*  CancelReferralModal */
 /* ------------------------------------------------------------------ */
 function CancelReferralModal({
   open,
@@ -649,7 +651,7 @@ function CancelReferralModal({
   const [errors, setErrors] = useState<{ reason?: string; detail?: string }>({});
   const [reasonOptions, setReasonOptions] = useState<{ value: number; name: string }[]>([]);
 
-  // Fetch cancel reason options when modal opens — matches Nuxt modalSubmitPatient.vue
+  // Fetch cancel reason options when modal opens
   useEffect(() => {
     if (!open) return;
     setReason("");
@@ -658,7 +660,7 @@ function CancelReferralModal({
 
     const fetchOptions = async () => {
       try {
-        // Determine referral kind flags from deliveryPeriod (like Nuxt)
+        // Determine referral kind flags from deliveryPeriod 
         const kindName = deliveryPeriod?.referralKind?.name || "";
         const params: any = {
           statusType: "ยกเลิก",
@@ -668,19 +670,35 @@ function CancelReferralModal({
         else if (kindName === "IPD" || kindName === "ผู้ป่วยใน") params.isIpd = true;
         else if (kindName === "EMERGENCY" || kindName === "ฉุกเฉิน") params.isEr = true;
 
-        // Pass hospital param from auth profile — matches Nuxt buildParams + paramOpiton.hospital
+        // Pass hospital param
         const roleName = profile?.permissionGroup?.role?.name;
-        const hospitalId = (profile?.permissionGroup as any)?.hospital?.id
+        const profileHospitalId = (profile?.permissionGroup as any)?.hospital?.id
           || profile?.hospital?.id;
-        if (roleName === "superAdmin") {
-          const h = hospitalId ?? optionHospital;
-          if (h) params.hospital = Number(h);
-        } else if (roleName === "superAdminHospital" || roleName === "superAdminZone") {
-          if (hospitalId) params.hospital = Number(hospitalId);
+        if (roleName === "superAdmin" && optionHospital) {
+          params.hospital = Number(optionHospital);
+        } else if (roleName === "superAdminHospital" && profileHospitalId) {
+          params.hospital = Number(profileHospitalId);
+        } else if (roleName === "superAdminZone" && profileHospitalId) {
+          params.hospital = Number(profileHospitalId);
         }
 
+        // Get hospital from document for client-side filtering if no API filter
+        const docHospitalId = typeof deliveryPeriod?.fromHospital === "object"
+          ? deliveryPeriod?.fromHospital?.id
+          : deliveryPeriod?.fromHospital;
+
         const res = await findStatusDetail(params);
-        const items = res?.referralStatusDetails || res || [];
+        let items = res?.referralStatusDetails || res || [];
+
+        // If no hospital filter was sent and we have doc hospital, filter client-side
+        if (!params.hospital && docHospitalId && Array.isArray(items)) {
+          items = items.filter((item: any) => {
+            const itemHospId = item.hospital?.id || item.hospital;
+            return itemHospId === Number(docHospitalId);
+          });
+
+        }
+
         setReasonOptions(
           Array.isArray(items)
             ? items.map((item: any) => ({ value: item.id, name: item.name }))
@@ -704,7 +722,7 @@ function CancelReferralModal({
   const handleSave = () => {
     if (!validate()) return;
     onSave({
-      referralStatus: 5, // Status ID for cancellation (matches Nuxt)
+      referralStatus: 5, // Status ID for cancellation 
       referralStatusDetailCurrent: reason as number,
       referralStatusDetailCurrentText: detail,
     });
@@ -751,7 +769,11 @@ function CancelReferralModal({
             size="small"
             MenuProps={{ PaperProps: { sx: { maxHeight: 250 } } }}
             sx={{
-              borderRadius: "6px",
+              bgcolor: "#F8FFFE",
+              borderRadius: 1,
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "#d1d5db" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#00AF75" },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#00AF75", borderWidth: 2 },
               "& .MuiSelect-select": { py: "10px", pr: reason ? "48px !important" : undefined },
             }}
             endAdornment={
@@ -903,7 +925,7 @@ function RequestReferOutDetailPageInner() {
     fetchData();
   }, [fetchData]);
 
-  // Handle add document from shared TreatmentDocuments component — same logic as Nuxt
+  // Handle add document from shared TreatmentDocuments component — same logic as original
   const handleAddDocument = async (newDoc: TreatDocItem) => {
     if (!doc?.id) return;
     try {
@@ -931,7 +953,7 @@ function RequestReferOutDetailPageInner() {
     }
   };
 
-  // Handle life status modal save — matches Nuxt checkFormData + handleModelStatusLife
+  // Handle life status modal save
   const handleLifeStatusSave = async (payload: {
     referralLifeStatus: string;
     referralLifeStatusNote: string;
@@ -941,14 +963,14 @@ function RequestReferOutDetailPageInner() {
     try {
       await updateReferral(doc.id, payload);
       setLifeStatusModalOpen(false);
-      // Refresh data (matches Nuxt getDataRefer)
+      // Refresh data 
       await fetchData();
     } catch (err) {
       console.error("Error updating life status:", err);
     }
   };
 
-  // Go to patient treatment history — matches Nuxt gotoHistoryPatient()
+  // Go to patient treatment history
   const gotoHistoryPatient = async () => {
     if (!doc) return;
     const patient = doc.data?.patient || {};
@@ -983,7 +1005,7 @@ function RequestReferOutDetailPageInner() {
     }
   };
 
-  // Handle cancel referral — matches Nuxt handleCancelRefer
+  // Handle cancel referral
   const handleCancelReferral = async (payload: {
     referralStatus: number;
     referralStatusDetailCurrent: number;
@@ -1080,8 +1102,8 @@ function RequestReferOutDetailPageInner() {
   // Delivery periods
   const deliveryPeriods = Array.isArray(doc.deliveryPeriod) ? doc.deliveryPeriod : [];
 
-  // Sorted group case with order (Nuxt: sortedReferGroupCaseWithOrder)
-  // For IPD/EMERGENCY: show only the current record (matches Nuxt lines 170-192)
+  // Sorted group case with order 
+  // For IPD/EMERGENCY: show only the current record 
   const sortedGroupDocs = (() => {
     const kindName = doc.referralKind?.name || "";
     if (kindName === "IPD" || kindName === "EMERGENCY") {
@@ -1102,10 +1124,10 @@ function RequestReferOutDetailPageInner() {
     }));
   })();
 
-  // shouldShowButtons — matches Nuxt: route id === current doc id
+  // shouldShowButtons
   const shouldShowButtons = String(id) === String(doc.id);
 
-  // Check if cancel button should show — matches Nuxt refer-out/in conditions
+  // Check if cancel button should show
   const shouldShowCancel = shouldShowButtons &&
     statusName &&
     statusName !== "ยกเลิก" &&
@@ -1125,7 +1147,7 @@ function RequestReferOutDetailPageInner() {
     statusName !== "ยืนยันนัดหมาย" &&
     referralKindText !== "OPD";
 
-  // Build hospital list matching Nuxt modalCheckReferToHospital.vue data
+  // Build hospital list 
   const viewHospitals = groupDocs
     .map((item: any) => ({
       id: item.toHospital?.id || item.id,
@@ -1138,7 +1160,7 @@ function RequestReferOutDetailPageInner() {
     }))
     .filter((h: any) => h.name);
 
-  // Check if print button should show — matches Nuxt: status exists, not "รอตอบรับ", is latest in group
+  // Check if print button should show
   const shouldShowPrint = statusName &&
     statusName !== "รอตอบรับ" &&
     sortedGroupDocs.length > 0 &&
@@ -1149,7 +1171,7 @@ function RequestReferOutDetailPageInner() {
 
   return (
     <Box sx={{ px: "24px" }}>
-      {/* ── Toast notification (matches Nuxt style) ── */}
+      {/* ── Toast notification  ── */}
       <Snackbar
         open={toastOpen}
         autoHideDuration={4000}
@@ -1191,7 +1213,7 @@ function RequestReferOutDetailPageInner() {
         deliveryPeriod={doc}
       />
 
-      {/* ── View Selected Hospitals Modal (refer-out only) — matches Nuxt modalCheckReferToHospital.vue ── */}
+      {/* ── View Selected Hospitals Modal (refer-out only) */}
       <Dialog
         open={viewHospitalsModalOpen}
         onClose={() => setViewHospitalsModalOpen(false)}
@@ -1458,7 +1480,7 @@ function RequestReferOutDetailPageInner() {
                 variant="outlined"
                 onClick={() => {
                   // Open print page in new tab — it will replace itself with PDF blob
-                  // Result: detail tab stays + print tab becomes blob tab (like Nuxt)
+                  // Result: detail tab stays + print tab becomes blob tab 
                   const printUrl = `/print-refer?id=${doc.id}&referraltype=refer-out&isWatch=true&printReferral=true`;
                   window.open(printUrl, "_blank");
                 }}
@@ -1508,15 +1530,16 @@ function RequestReferOutDetailPageInner() {
                 }
               />
               <Box sx={{ p: 2 }}>
-                {/* Delivery period — matches Nuxt:
-                    - referral-info-ipd.vue (IPD/ER on /refer-out) → bordered card, "ข้อมูลวันและเวลา", 2 cols, yellow bg
-                    - referral-request-info.vue / referral-info.vue → "ระยะเวลารับรองสิทธิ์", 4 cols, กรุณาใช้สิทธิ์ */}
+                {/* Delivery period
+                    - IPD/ER detail (IPD/ER on /refer-out) → bordered card, "ข้อมูลวันและเวลา", 2 cols, yellow bg
+                    - OPD detail / OPD detail → "ระยะเวลารับรองสิทธิ์", 4 cols, กรุณาใช้สิทธิ์ */}
                 {deliveryPeriods.length > 0 && (() => {
+
                   const isIPDorERRoute = isReferOutRoute && (referralKindText === "IPD" || referralKindText === "EMERGENCY");
                   const periodId = doc.referralDeliveryPeriod?.id;
 
                   if (isIPDorERRoute) {
-                    /* ── IPD/ER on /refer-out → referral-info-ipd.vue style ── */
+                    /* ── IPD/ER on /refer-out → IPD/ER detail style ── */
                     return (
                       <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1, mb: 2 }}>
                         <Box sx={{ borderBottom: "1px solid #E5E7EB", px: 2, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1570,19 +1593,42 @@ function RequestReferOutDetailPageInner() {
                     );
                   }
 
-                  /* ── OPD / request-refer-out → referral-request-info.vue / referral-info.vue style ── */
+                  /* ── OPD / request-refer-out → OPD detail style (bordered card + ? icon) ── */
                   return (
-                    <Box sx={{ mb: 2 }}>
-                      <Box sx={{ borderBottom: "2px solid #00AF75", pb: 1, mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ระยะเวลารับรองสิทธิ์</Typography>
+                    <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "8px", mb: 2 }}>
+                      {/* Header with border-bottom divider + tooltip icon */}
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E5E7EB", px: 2, py: 1.5 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: "1.125rem" }}>ระยะเวลารับรองสิทธิ์</Typography>
+                        <Tooltip
+                          title={
+                            <Box sx={{ p: 1 }}>
+                              <Typography sx={{ fontWeight: 700, fontSize: "1rem", mb: 1 }}>ระยะเวลารับรองสิทธิ์แต่ละแบบจะมีผลกับการนัดหมาย</Typography>
+                              <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
+                                <Typography sx={{ fontWeight: 600, minWidth: 130 }}>ใช้ได้ครั้งเดียว</Typography>
+                                <Typography>จะไม่สามารถนัดรักษาต่อเนื่องได้ ขอบเขตของเวลานัดหมายจะอยู่ในเวลาที่กำหนดเป็นต้นไปภายในวันที่กำหนด</Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", gap: 2 }}>
+                                <Typography sx={{ fontWeight: 600, minWidth: 130 }}>กำหนดช่วง และ อื่นๆ</Typography>
+                                <Typography>สามารถกำหนดนัดหมายได้ภายในช่วงเวลาที่กำหนดเท่านั้น</Typography>
+                              </Box>
+                            </Box>
+                          }
+                          placement="top"
+                          arrow
+                          slotProps={{ tooltip: { sx: { maxWidth: 500, bgcolor: "#374151", p: 2 } } }}
+                        >
+                          <HelpOutlineIcon sx={{ color: "#9CA3AF", fontSize: 20, cursor: "pointer", "&:hover": { color: "#6B7280" } }} />
+                        </Tooltip>
                       </Box>
+                      {/* Content */}
                       <Box sx={{ p: 2 }}>
                         {deliveryPeriods.map((period: any, idx: number) => (
                           <Box key={idx}>
-                            <Typography sx={{ fontWeight: 700, mb: 1 }}>
-                              รูปแบบ: {doc.referralDeliveryPeriod?.name || "-"}
+                            <Typography sx={{ fontWeight: 700, mb: 1, p: 1 }}>
+                              {doc.referralDeliveryPeriod?.name || "-"}
                             </Typography>
                             {periodId === 1 ? (
+                              /* periodId 1 (ใช้ได้ครั้งเดียว): 2 cols, uses endDelivery for both date & time */
                               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                                 <Box>
                                   <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่เริ่มต้น</Typography>
@@ -1594,22 +1640,28 @@ function RequestReferOutDetailPageInner() {
                                 </Box>
                               </Box>
                             ) : (
-                              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                              /* periodId 2-7: 4 cols
+                                 Logic: periodId===2 → col2 time from startDelivery; periodId 3-7 → col2 time from endDelivery */
+                              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, p: 1 }}>
                                 <Box>
                                   <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่เริ่มต้น</Typography>
                                   <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(period.startDelivery || period.endDelivery)}</Typography>
                                 </Box>
                                 <Box>
-                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลาเริ่มต้น</Typography>
-                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.startDelivery || period.endDelivery)} น.</Typography>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลา</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>
+                                    {periodId === 2
+                                      ? fmtTimeDirect(period.startDelivery || period.endDelivery)
+                                      : fmtTimeDirect(period.endDelivery)}
+                                  </Typography>
                                 </Box>
                                 <Box>
-                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันที่สิ้นสุด</Typography>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>วันหมดอายุ</Typography>
                                   <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(period.endDelivery)}</Typography>
                                 </Box>
                                 <Box>
-                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลาสิ้นสุด</Typography>
-                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.endDelivery)} น.</Typography>
+                                  <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>เวลา</Typography>
+                                  <Typography sx={{ fontWeight: 700 }}>{fmtTimeDirect(period.endDelivery)}</Typography>
                                 </Box>
                               </Box>
                             )}
@@ -1617,7 +1669,7 @@ function RequestReferOutDetailPageInner() {
                         ))}
                         {/* ตอบรับภายในวันที่ */}
                         {doc.isEndAccept && (
-                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 2 }}>
+                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: 2, p: 1 }}>
                             <Box>
                               <Typography sx={{ fontSize: "0.875rem", color: "#374151" }}>ตอบรับภายในวันที่</Typography>
                               <Typography sx={{ fontWeight: 700 }}>{fmtDateThaiDirect(doc.endAccept)}</Typography>
@@ -1629,20 +1681,17 @@ function RequestReferOutDetailPageInner() {
                           </Box>
                         )}
                       </Box>
-                      <Typography sx={{ fontSize: "0.875rem", color: "#6b7280", mt: 1 }}>
-                        กรุณาใช้สิทธิ์การรักษาตามระยะเวลาดังกล่าว
-                      </Typography>
                     </Box>
                   );
                 })()}
 
-                {/* ข้อมูลสถานพยาบาล — matches Nuxt referral-info-ipd.vue labels */}
+                {/* ข้อมูลสถานพยาบาล */}
                 {(() => {
                   const isIPDorER = referralKindText === "IPD" || referralKindText === "EMERGENCY";
                   const isWaiting = statusName === "รอตอบรับ";
-                  // Nuxt labels depend on route path; for refer-out: สถานพยาบาลปลายทาง
+                  // Labels depend on route path; for refer-out: สถานพยาบาลปลายทาง
                   const hospLabel = "สถานพยาบาลปลายทาง";
-                  // Nuxt hospitalFrom: for refer-out uses toHospital (DB swap)
+                  // hospitalFrom: for refer-out uses toHospital (DB swap)
                   const hospValue = doc.toHospital?.name || "-";
                   // Show "รอตอบรับ" in yellow for IPD/ER when status is รอตอบรับ
                   const showWaiting = isIPDorER && isWaiting;
@@ -1700,7 +1749,7 @@ function RequestReferOutDetailPageInner() {
                   );
                 })()}
 
-                {/* ข้อมูลผู้สร้างใบส่งตัว — matches Nuxt referral-info-ipd.vue */}
+                {/* ข้อมูลผู้สร้างใบส่งตัว */}
                 <Box sx={{ mb: 2, mt: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
@@ -1727,7 +1776,7 @@ function RequestReferOutDetailPageInner() {
                   </Box>
                 </Box>
 
-                {/* เหตุผลและการสาเหตุ — matches Nuxt referral-info-ipd.vue */}
+                {/* เหตุผลและการสาเหตุ */}
                 <Box sx={{ mb: 2, mt: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
                     <Typography sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
@@ -1802,9 +1851,9 @@ function RequestReferOutDetailPageInner() {
                 </Box>
 
                 {/* ระดับความสำคัญ — conditional based on route + referralKind
-                  * /request-refer-out → referral-request-info.vue: English text, "H" badge, "ระดับความเฉียบพลัน", no ICU
-                  * /refer-out + OPD → referral-info.vue: Thai text, shortName badge, "ระดับความเฉียบพลัน", no ICU
-                  * /refer-out + IPD/EMERGENCY → referral-info-ipd.vue: Thai text, shortName badge, "ความเฉียบพลัน", ICU, ใช้รถ/ใช้พยาบาล
+                  * /request-refer-out → OPD detail: English text, "H" badge, "ระดับความเฉียบพลัน", no ICU
+                  * /refer-out + OPD → OPD detail: Thai text, shortName badge, "ระดับความเฉียบพลัน", no ICU
+                  * /refer-out + IPD/EMERGENCY → IPD/ER detail: Thai text, shortName badge, "ความเฉียบพลัน", ICU, ใช้รถ/ใช้พยาบาล
                 */}
                 {(() => {
                   const kindName = referralKindText;
@@ -1942,7 +1991,7 @@ function RequestReferOutDetailPageInner() {
                   </Box>
                 </Box>
 
-                {/* อุปกรณ์ที่จำเป็น — shown on /refer-out only (commented out in referral-request-info.vue) */}
+                {/* อุปกรณ์ที่จำเป็น — shown on /refer-out only (commented out in OPD detail) */}
                 {isReferOutRoute && (
                   <Box sx={{ mb: 2, mt: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E5E7EB", pb: 1, mb: 2 }}>
@@ -1978,7 +2027,7 @@ function RequestReferOutDetailPageInner() {
           </Box>
         </Box>
 
-        {/* ── ข้อมูลสุขภาพประจำตัวผู้ป่วย — matches Nuxt health-info.vue ── */}
+        {/* ── ข้อมูลสุขภาพประจำตัวผู้ป่วย */}
         <Box sx={{ mt: "24px" }}>
           <Box sx={{ border: "1px solid #E5E7EB", borderRadius: "8px", overflow: "hidden" }}>
             <SectionHeader title="ข้อมูลสุขภาพประจำตัวผู้ป่วย" />
@@ -2032,7 +2081,7 @@ function RequestReferOutDetailPageInner() {
                 <Typography sx={{ fontWeight: 600, fontSize: "1.125rem", color: "#036245" }}>ข้อมูลวัคซีน</Typography>
               </Box>
 
-              {/* วัคซีนล่าสุด — grid layout matching Nuxt */}
+              {/* วัคซีนล่าสุด — grid layout */}
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1, mb: 1 }}>
                   <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วัคซีนล่าสุด</Typography>
@@ -2052,7 +2101,7 @@ function RequestReferOutDetailPageInner() {
                 )}
               </Box>
 
-              {/* วัคซีนโควิด — grid layout matching Nuxt */}
+              {/* วัคซีนโควิด — grid layout */}
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: "grid", gridTemplateColumns: "4fr 3fr 4fr 1fr", gap: 2, px: 1.5, py: 1, mb: 1 }}>
                   <Typography sx={{ fontSize: "0.875rem", fontWeight: 700, color: "#4b5563" }}>วัคซีนโควิด</Typography>
@@ -2087,7 +2136,7 @@ function RequestReferOutDetailPageInner() {
                 </Typography>
               </Box>
 
-              {/* Vital signs — match Nuxt: always show unit suffix */}
+              {/* Vital signs — match original: always show unit suffix */}
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2, mb: 3 }}>
                 <Box>
                   <Typography sx={{ fontWeight: 500, fontSize: "1rem", mb: "4px" }}>อุณหภูมิ</Typography>

@@ -283,9 +283,7 @@ function OPDReferralInner() {
             name: doc.referralCause.name || "",
           } : null,
         };
-        console.log("📋 Draft doc keys:", Object.keys(doc));
-        console.log("📋 Draft certificationPeriod:", doc.referralDeliveryPeriod);
-        console.log("📋 Draft mapped formData:", JSON.stringify(draftFormData, null, 2));
+
         updateFormData(draftFormData);
         setDraftLoaded((c) => c + 1);
       }).catch((err) => {
@@ -681,9 +679,8 @@ function OPDReferralInner() {
           referralFiles: [],
         };
 
-        console.log("📦 referInfo.appointmentData:", JSON.stringify(referInfo?.appointmentData, null, 2));
-        console.log("📦 Payload appointmentData:", JSON.stringify(payload.appointmentData, null, 2));
-        console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+        // Debug payload can be re-enabled if needed
+        // console.log("📦 Payload:", JSON.stringify(payload, null, 2));
 
         if (parsedDraftId && referInfo?.id) {
           await updateReferralDocument(referInfo.id, payload);

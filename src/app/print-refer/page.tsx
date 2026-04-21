@@ -516,7 +516,7 @@ function PrintReferPageInner() {
                   </div>
                   <div style={{ display: "flex", gap: "2px" }}>
                     <div style={{ flex: 1 }}><span style={S.label}>วันที่สิ้นสุด</span><span>: {dp ? fmtDateThai(dp.endDelivery) : "-"}</span></div>
-                    <div style={{ flex: 1 }}><span style={S.label}>เวลาสิ้นสุด</span><span>: {dp ? fmtTimeThai(dp.endDelivery) + " น." : "-"}</span></div>
+                    <div style={{ flex: 1 }}><span style={S.label}>เวลาสิ้นสุด</span><span>: {dp ? (data.referralDeliveryPeriod?.name === "ใช้ได้ครั้งเดียว" ? "23:59 น." : fmtTimeThai(dp.endDelivery) + " น.") : "-"}</span></div>
                   </div>
                 </div>
               );
