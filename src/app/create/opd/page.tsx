@@ -170,12 +170,26 @@ function OPDReferralInner() {
   // Referral store — for referBack list
   const { findAndCountReferral, checkReferPointHospital, findGroupCase } = useReferralStore();
 
-  // Local state — hospital table
-  const [search, setSearch] = useState("");
-  const [zone, setZone] = useState("");
-  const [subType, setSubType] = useState("");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10); // default 10 rows per page
+  // ── Zustand: hospital search filters & referBack state ──
+  const {
+    hospitalSearch: search, setHospitalSearch: setSearch,
+    hospitalZoneFilter: zone, setHospitalZoneFilter: setZone,
+    hospitalSubTypeFilter: subType, setHospitalSubTypeFilter: setSubType,
+    hospitalPage: page, setHospitalPage: setPage,
+    hospitalLimit: limit, setHospitalLimit: setLimit,
+    rbItems, setRbItems,
+    rbTotal, setRbTotal,
+    rbPage, setRbPage,
+    rbLimit, setRbLimit,
+    rbSearchName, setRbSearchName,
+    rbSearchNo, setRbSearchNo,
+    rbSearchHospital, setRbSearchHospital,
+    rbReferPoints, setRbReferPoints,
+    referGroupCase, setReferGroupCase,
+    referGroupCasePatient, setReferGroupCasePatient,
+  } = useReferralCreateStore();
+
+  // Local-only UI state (ephemeral — not worth persisting)
   const [isLoading, setIsLoading] = useState(false);
   const [sendData, setSendData] = useState(false);
   const [patientInfo, setPatientInfo] = useState<{ firstname?: string; lastname?: string } | null>(null);
@@ -183,21 +197,8 @@ function OPDReferralInner() {
   const [successToast, setSuccessToast] = useState({ open: false, message: "" });
   const [draftLoaded, setDraftLoaded] = useState(0);
 
-  // ReferBack groupCase state
-  const [referGroupCase, setReferGroupCase] = useState<any>(null);
-  const [referGroupCasePatient, setReferGroupCasePatient] = useState<any>(null);
-  // ReferBack referPoint selection state (for when multiple referPoints exist)
-  const [rbReferPoints, setRbReferPoints] = useState<any[]>([]);
-
-  // ReferBack-specific state — server-side pagination (matches Nuxt)
+  // ReferBack-specific flag
   const isReferBack = kind === "referBack";
-  const [rbItems, setRbItems] = useState<any[]>([]);
-  const [rbTotal, setRbTotal] = useState(0);
-  const [rbPage, setRbPage] = useState(1);
-  const [rbLimit, setRbLimit] = useState(10);
-  const [rbSearchName, setRbSearchName] = useState("");
-  const [rbSearchNo, setRbSearchNo] = useState("");
-  const [rbSearchHospital, setRbSearchHospital] = useState("");
 
   // Fetch referBack list with server-side pagination (matches Nuxt paramReferBack)
   const fetchReferBackList = useCallback(async (

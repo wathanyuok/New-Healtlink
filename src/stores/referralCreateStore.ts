@@ -86,6 +86,42 @@ interface ReferralCreateState {
   loading: boolean;
   setLoading: (v: boolean) => void;
 
+  // ── Hospital search filters (OPD create page) ──
+  hospitalSearch: string;
+  hospitalZoneFilter: string;
+  hospitalSubTypeFilter: string;
+  hospitalPage: number;
+  hospitalLimit: number;
+  setHospitalSearch: (v: string) => void;
+  setHospitalZoneFilter: (v: string) => void;
+  setHospitalSubTypeFilter: (v: string) => void;
+  setHospitalPage: (v: number) => void;
+  setHospitalLimit: (v: number) => void;
+
+  // ── ReferBack list state (OPD create page, kind=referBack) ──
+  rbItems: any[];
+  rbTotal: number;
+  rbPage: number;
+  rbLimit: number;
+  rbSearchName: string;
+  rbSearchNo: string;
+  rbSearchHospital: string;
+  setRbItems: (v: any[]) => void;
+  setRbTotal: (v: number) => void;
+  setRbPage: (v: number) => void;
+  setRbLimit: (v: number) => void;
+  setRbSearchName: (v: string) => void;
+  setRbSearchNo: (v: string) => void;
+  setRbSearchHospital: (v: string) => void;
+  rbReferPoints: any[];
+  setRbReferPoints: (v: any[]) => void;
+
+  // ── Group case (OPD create page) ──
+  referGroupCase: any;
+  referGroupCasePatient: any;
+  setReferGroupCase: (v: any) => void;
+  setReferGroupCasePatient: (v: any) => void;
+
   // Hospital list for selector
   hospitals: HospitalOption[];
   hospitalTotalCount: number;
@@ -244,6 +280,42 @@ const defaultFormData: FormDataType = {
 export const useReferralCreateStore = create<ReferralCreateState>((set, get) => ({
   loading: false,
   setLoading: (v) => set({ loading: v }),
+
+  // Hospital search filters
+  hospitalSearch: "",
+  hospitalZoneFilter: "",
+  hospitalSubTypeFilter: "",
+  hospitalPage: 1,
+  hospitalLimit: 10,
+  setHospitalSearch: (v) => set({ hospitalSearch: v }),
+  setHospitalZoneFilter: (v) => set({ hospitalZoneFilter: v }),
+  setHospitalSubTypeFilter: (v) => set({ hospitalSubTypeFilter: v }),
+  setHospitalPage: (v) => set({ hospitalPage: v }),
+  setHospitalLimit: (v) => set({ hospitalLimit: v }),
+
+  // ReferBack list state
+  rbItems: [],
+  rbTotal: 0,
+  rbPage: 1,
+  rbLimit: 10,
+  rbSearchName: "",
+  rbSearchNo: "",
+  rbSearchHospital: "",
+  setRbItems: (v) => set({ rbItems: v }),
+  setRbTotal: (v) => set({ rbTotal: v }),
+  setRbPage: (v) => set({ rbPage: v }),
+  setRbLimit: (v) => set({ rbLimit: v }),
+  setRbSearchName: (v) => set({ rbSearchName: v }),
+  setRbSearchNo: (v) => set({ rbSearchNo: v }),
+  setRbSearchHospital: (v) => set({ rbSearchHospital: v }),
+  rbReferPoints: [],
+  setRbReferPoints: (v) => set({ rbReferPoints: v }),
+
+  // Group case
+  referGroupCase: null,
+  referGroupCasePatient: null,
+  setReferGroupCase: (v) => set({ referGroupCase: v }),
+  setReferGroupCasePatient: (v) => set({ referGroupCasePatient: v }),
 
   hospitals: [],
   hospitalTotalCount: 0,

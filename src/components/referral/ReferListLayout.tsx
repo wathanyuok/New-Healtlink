@@ -27,10 +27,12 @@ import {
 
 import { useAuthStore } from "@/stores/authStore";
 import { useReferralStore } from "@/stores/referralStore";
+import { useReferralListStore } from "@/stores/referralListStore";
 import { useHospitalFormOptionsAll } from "@/hooks/useHospitalFormOptionsAll";
 import TableReferralList from "./TableReferralList";
 import { headerReferralTable } from "@/data/headerReferralTable";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
+import HistoryReferralModal from "@/components/modal/HistoryReferralModal";
 
 type ReferralType =
   | "referIn"
@@ -724,48 +726,43 @@ export default function ReferListLayout({
     fetchDoctorBranch,
   } = useHospitalFormOptionsAll();
 
-  // Filter state — mirrors all Nuxt refs
-  const [selectTime, setSelectTime] = useState<number | "">("");
-  const [selectStatus, setSelectStatus] = useState<number | "">("");
-  const [selectReferralTypeStart, setSelectReferralTypeStart] = useState<
-    number | ""
-  >("");
-  const [selectReferralTypeEnd, setSelectReferralTypeEnd] = useState<
-    number | ""
-  >("");
-  const [selectDoctorBranch, setSelectDoctorBranch] = useState<number | "">("");
-  const [selectZone, setSelectZone] = useState<number | "">("");
-  const [selectSubType, setSelectSubType] = useState<number | "">("");
-  const [selectHospital, setSelectHospital] = useState<number | "">("");
-  const [searchPatient, setSearchPatient] = useState("");
-  const [searchReferNumber, setSearchReferNumber] = useState("");
-  const [searchICD, setSearchICD] = useState("");
+  // ── Zustand: referralListStore (filters, pagination, data) ──
+  const {
+    selectTime, setSelectTime,
+    selectStatus, setSelectStatus,
+    selectReferralTypeStart, setSelectReferralTypeStart,
+    selectReferralTypeEnd, setSelectReferralTypeEnd,
+    selectDoctorBranch, setSelectDoctorBranch,
+    selectZone, setSelectZone,
+    selectSubType, setSelectSubType,
+    selectHospital, setSelectHospital,
+    searchPatient, setSearchPatient,
+    searchReferNumber, setSearchReferNumber,
+    searchICD, setSearchICD,
+    dateFrom, setDateFrom,
+    dateTo, setDateTo,
+    offset, setOffset,
+    limit, setLimit,
+    totalCount, setTotalCount,
+    referralDocuments, setReferralDocuments,
+    isLoadingList, setIsLoadingList,
+    loadingItemId, setLoadingItemId,
+    activeTab, setActiveTab,
+    resetFilters,
+  } = useReferralListStore();
 
-  // Date range — default last 6 months
-  const [dateFrom, setDateFrom] = useState<string>(() =>
-    minusMonthsStartOfMonth(6)
-  );
-  const [dateTo, setDateTo] = useState<string>(() => today());
+  // History modal state
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyDocId, setHistoryDocId] = useState<string | number | null>(null);
 
-  // Pagination
-  const [offset, setOffset] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [totalCount, setTotalCount] = useState(0);
-
-  // Data
-  const [referralDocuments, setReferralDocuments] = useState<any[]>([]);
-  const [isLoadingList, setIsLoadingList] = useState(false);
-  const [loadingItemId, setLoadingItemId] = useState<string | number | null>(
-    null
-  );
-
-  // Active tab (read from URL query)
+  // Sync activeTab from URL query on mount
   const tabFromQuery = searchParams?.get("tab") as TabKey | null;
-  const [activeTab, setActiveTab] = useState<TabKey>(
-    tabFromQuery && ["all", "refer-opd", "refer-ipd", "refer-er"].includes(tabFromQuery)
-      ? tabFromQuery
-      : "all"
-  );
+  useEffect(() => {
+    if (tabFromQuery && ["all", "refer-opd", "refer-ipd", "refer-er"].includes(tabFromQuery)) {
+      setActiveTab(tabFromQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Memoized derived values
   const isReferOut = referralType === "referOut";
@@ -835,19 +832,7 @@ export default function ReferListLayout({
     // selectTime === 4 = custom range, don't override
   }, [selectTime]);
 
-  // Watchers for clearing related filters (mirrors Nuxt behavior)
-  useEffect(() => {
-    if (selectZone) {
-      setSelectSubType("");
-      setSelectHospital("");
-    }
-  }, [selectZone]);
-
-  useEffect(() => {
-    if (selectSubType) {
-      setSelectHospital("");
-    }
-  }, [selectSubType]);
+  // Zone/subType clearing is handled by Zustand setters (setSelectZone, setSelectSubType)
 
   // Build API params — mirrors Nuxt updateParam
   const buildApiParams = useCallback(() => {
@@ -1021,19 +1006,7 @@ export default function ReferListLayout({
   }, [selectZone, selectSubType]);
 
   const clearFilters = () => {
-    setSelectTime("");
-    setSelectStatus("");
-    setSelectReferralTypeStart("");
-    setSelectReferralTypeEnd("");
-    setSelectDoctorBranch("");
-    setSelectZone("");
-    setSelectSubType("");
-    setSelectHospital("");
-    setSearchPatient("");
-    setSearchReferNumber("");
-    setSearchICD("");
-    setDateFrom(minusMonthsStartOfMonth(6));
-    setDateTo(today());
+    resetFilters();
     setOffset(1);
   };
 
@@ -1239,8 +1212,8 @@ export default function ReferListLayout({
     }
 
     if (actionType === "history") {
-      // TODO: open history modal
-      console.log("history", item.id);
+      setHistoryDocId(item.id);
+      setHistoryModalOpen(true);
     }
   };
 
@@ -1571,6 +1544,16 @@ export default function ReferListLayout({
         />
       </Paper>
       </Box>
+
+      {/* History modal */}
+      <HistoryReferralModal
+        open={historyModalOpen}
+        referralDocumentId={historyDocId}
+        onClose={() => {
+          setHistoryModalOpen(false);
+          setHistoryDocId(null);
+        }}
+      />
     </Box>
   );
 }

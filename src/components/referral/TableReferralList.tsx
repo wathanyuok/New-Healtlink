@@ -306,14 +306,14 @@ export default function TableReferralList({
             <Typography sx={{ color: "#EAB308", fontWeight: 700 }}>รอยืนยัน</Typography>
           );
         }
-        return <Typography>{item.toHospital?.name || "-"}</Typography>;
+        return <Typography sx={{ whiteSpace: "nowrap" }}>{item.toHospital?.name || "-"}</Typography>;
       }
       case "สถานพยาบาลต้นทาง":
-        return <Typography>{item.fromHospital?.name || "-"}</Typography>;
+        return <Typography sx={{ whiteSpace: "nowrap" }}>{item.fromHospital?.name || "-"}</Typography>;
       case "สถานพยาบาลส่งคำขอไป":
-        return <Typography>{item.fromHospital?.name || "-"}</Typography>;
+        return <Typography sx={{ whiteSpace: "nowrap" }}>{item.fromHospital?.name || "-"}</Typography>;
       case "สถานพยาบาลส่งคำขอมา":
-        return <Typography>{item.toHospital?.name || "-"}</Typography>;
+        return <Typography sx={{ whiteSpace: "nowrap" }}>{item.toHospital?.name || "-"}</Typography>;
       case "โรคหลัก": {
         const icd10 = item.data?.visitData?.icd10;
         if (!Array.isArray(icd10) || icd10.length === 0)
