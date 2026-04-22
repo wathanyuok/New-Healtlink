@@ -43,6 +43,92 @@ import {
   type DoctorBranchOption,
 } from "@/stores/referralCreateStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useReferralStore } from "@/stores/referralStore";
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+/** Format ISO string to Thai Buddhist date+time e.g. "12 เม.ย. 2569 23:25 น." */
+function formatThaiDateTimeIntl(isoString: string): string {
+  if (!isoString) return "-";
+  try {
+    const date = new Date(isoString);
+    const opts: Intl.DateTimeFormatOptions = {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok",
+    };
+    const formatted = new Intl.DateTimeFormat("th-TH-u-ca-buddhist", opts).format(date);
+    return formatted.replace(",", "") + " น.";
+  } catch { return "-"; }
+}
+
+/** Format ISO string to Thai Buddhist date only e.g. "12 เม.ย. 2569" */
+function formatStartDateThai(isoString: string): string {
+  if (!isoString) return "-";
+  try {
+    const date = new Date(isoString);
+    const opts: Intl.DateTimeFormatOptions = {
+      day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Bangkok",
+    };
+    return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", opts).format(date);
+  } catch { return "-"; }
+}
+
+/** Extract time HH:mm from ISO string */
+function extractTimeFromISO(isoString: string): string {
+  if (!isoString) return "-";
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" });
+  } catch { return "-"; }
+}
+
+/** Format end time from ISO string e.g. "23:59" */
+function formatEndTime(isoString: string): string {
+  return extractTimeFromISO(isoString);
+}
+
+/** Elapsed time — matches Nuxt getElapsedTime logic exactly */
+function getElapsedTime(createdAt: string, updatedAt: string, referralStatus: string): string {
+  const now = Date.now();
+
+  // "ฉบับร่าง" → count from createdAt
+  if (referralStatus === "ฉบับร่าง") {
+    if (!createdAt) return "-";
+    const diff = now - new Date(createdAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+    if (mins < 60) return `${mins} นาทีที่แล้ว`;
+    const hrs = Math.floor(diff / 3600000);
+    if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+    return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+  }
+
+  // "รอตอบรับ" → count from updatedAt, red after 15 min
+  if (referralStatus === "รอตอบรับ") {
+    if (!updatedAt) return "-";
+    const diff = now - new Date(updatedAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+    if (mins >= 15) {
+      if (mins < 60) return `${mins} นาทีที่แล้ว`;
+      const hrs = Math.floor(diff / 3600000);
+      if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+      return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+    }
+    return `${mins} นาที`;
+  }
+
+  // Other statuses (รับเข้ารักษา, ยกเลิก, etc.) → count from updatedAt
+  if (!updatedAt) return "-";
+  const diff = now - new Date(updatedAt).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+  return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  OPD Inner (wrapped in Suspense)                                    */
@@ -58,6 +144,7 @@ function OPDReferralInner() {
   const doctorBranchParam = searchParams.get("docter_branch");
   const branchNamesParam = searchParams.get("branch_names");
   const draftId = searchParams.get("draft");
+  const groupCaseParam = searchParams.get("groupCase");
 
   // Store
   const {
@@ -80,7 +167,10 @@ function OPDReferralInner() {
   // Auth store — for fromHospital (user's own hospital)
   const { profile, optionHospital } = useAuthStore();
 
-  // Local state
+  // Referral store — for referBack list
+  const { findAndCountReferral, checkReferPointHospital, findGroupCase } = useReferralStore();
+
+  // Local state — hospital table
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState("");
   const [subType, setSubType] = useState("");
@@ -92,6 +182,179 @@ function OPDReferralInner() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [successToast, setSuccessToast] = useState({ open: false, message: "" });
   const [draftLoaded, setDraftLoaded] = useState(0);
+
+  // ReferBack groupCase state
+  const [referGroupCase, setReferGroupCase] = useState<any>(null);
+  const [referGroupCasePatient, setReferGroupCasePatient] = useState<any>(null);
+  // ReferBack referPoint selection state (for when multiple referPoints exist)
+  const [rbReferPoints, setRbReferPoints] = useState<any[]>([]);
+
+  // ReferBack-specific state — server-side pagination (matches Nuxt)
+  const isReferBack = kind === "referBack";
+  const [rbItems, setRbItems] = useState<any[]>([]);
+  const [rbTotal, setRbTotal] = useState(0);
+  const [rbPage, setRbPage] = useState(1);
+  const [rbLimit, setRbLimit] = useState(10);
+  const [rbSearchName, setRbSearchName] = useState("");
+  const [rbSearchNo, setRbSearchNo] = useState("");
+  const [rbSearchHospital, setRbSearchHospital] = useState("");
+
+  // Fetch referBack list with server-side pagination (matches Nuxt paramReferBack)
+  const fetchReferBackList = useCallback(async (
+    pageOverride?: number,
+    limitOverride?: number,
+    searchNameOverride?: string,
+    searchNoOverride?: string,
+    searchHospitalOverride?: string,
+  ) => {
+    try {
+      const myHospitalId = optionHospital || (profile as any)?.hospital?.id || (profile as any)?.permissionGroup?.hospital?.id;
+      const p: any = {
+        limit: limitOverride ?? rbLimit,
+        offset: pageOverride ?? rbPage,
+        search: searchNameOverride ?? rbSearchName,
+        isTransferred: false,
+        referralType: 3,
+        referralKind: 3,
+        referralStatus: 2,
+        runNumberSearch: searchNoOverride ?? rbSearchNo,
+        toHospitalSearch: searchHospitalOverride ?? rbSearchHospital,
+      };
+      // Send toHospital (matches Nuxt: option_hospital or permissionGroup hospital)
+      if (myHospitalId) {
+        p.toHospital = myHospitalId;
+      }
+      const res = await findAndCountReferral(p);
+      let items = res?.referralDocuments || res?.data || [];
+      const count = res?.count ?? items.length;
+
+      // Client-side filter: exclude own hospital from fromHospital (matches Nuxt getReferInData)
+      const excludedIds = myHospitalId;
+      if (excludedIds && Array.isArray(items)) {
+        items = items.filter((item: any) => {
+          const fromId = item.fromHospital?.id || item.fromHospital;
+          return fromId !== Number(excludedIds);
+        });
+      }
+
+      setRbItems(items);
+      setRbTotal(count);
+    } catch (err) {
+      console.error("fetchReferBackList error:", err);
+      setRbItems([]);
+      setRbTotal(0);
+    }
+  }, [findAndCountReferral, optionHospital, profile, rbLimit, rbPage, rbSearchName, rbSearchNo, rbSearchHospital]);
+
+  // Load referBack list on mount
+  useEffect(() => {
+    if (isReferBack && !hospitalParam) {
+      fetchReferBackList();
+    }
+  }, [isReferBack, hospitalParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ReferBack search handlers — trigger server-side search (matches Nuxt)
+  const handleRbSearchName = (val: string) => {
+    setRbSearchName(val);
+    setRbPage(1);
+    fetchReferBackList(1, rbLimit, val, rbSearchNo, rbSearchHospital);
+  };
+  const handleRbSearchNo = (val: string) => {
+    setRbSearchNo(val);
+    setRbPage(1);
+    fetchReferBackList(1, rbLimit, rbSearchName, val, rbSearchHospital);
+  };
+  const handleRbSearchHospital = (val: string) => {
+    setRbSearchHospital(val);
+    setRbPage(1);
+    fetchReferBackList(1, rbLimit, rbSearchName, rbSearchNo, val);
+  };
+  const handleRbClearFilters = () => {
+    setRbSearchName(""); setRbSearchNo(""); setRbSearchHospital(""); setRbPage(1);
+    fetchReferBackList(1, rbLimit, "", "", "");
+  };
+  const handleRbPageChange = (newPage: number) => {
+    setRbPage(newPage);
+    fetchReferBackList(newPage, rbLimit);
+  };
+  const handleRbLimitChange = (newLimit: number) => {
+    setRbLimit(newLimit); setRbPage(1);
+    fetchReferBackList(1, newLimit);
+  };
+
+  // ReferBack select handler — matches Nuxt checkReferPoint_ReferBack logic
+  const handleSelectReferBack = async (item: any) => {
+    setIsLoading(true);
+    try {
+      const hospitalId = item.fromHospital?.id;
+      const apiResponse = await checkReferPointHospital({
+        hospital: hospitalId, useFor: "จุดรับใบส่งตัว", isOpd: true, isActive: true,
+      });
+
+      let baseParams: Record<string, string> = {
+        kind: "referBack",
+        hospital: item.fromHospital?.name || "",
+        hospitalID: String(hospitalId || ""),
+        deliveryPoint: "true",
+        groupCase: String(item.groupCase?.id || ""),
+      };
+
+      const points = Array.isArray(apiResponse) ? apiResponse : [];
+      setRbReferPoints(points); // store for SelectReferPoints step
+      if (points.length === 0) {
+        // No referPoint — skip to docter_branch
+        baseParams.docter_branch = "true";
+      } else if (points.length === 1) {
+        // Single referPoint — auto-select and skip to docter_branch
+        baseParams.referPoint = String(points[0].id);
+        baseParams.docter_branch = "true";
+        // Pass referPoint info for form display (matches Nuxt localreferPointData)
+        if (points[0].name) baseParams.referPointName = points[0].name;
+        if (points[0].phone) baseParams.referPointPhone = points[0].phone;
+        if (points[0].phone2) baseParams.referPointPhone2 = points[0].phone2;
+      } else {
+        // Multiple referPoints — show SelectReferPoints step (no docter_branch)
+      }
+
+      router.push(`/create/opd?${buildQuery(baseParams)}`);
+    } catch (err) {
+      console.error("handleSelectReferBack error:", err);
+      alert("ไม่สามารถดึงข้อมูลจุดรับใบส่งตัวได้");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ReferBack: handle referPoint selection (from SelectReferPoints step)
+  const handleSelectReferPoint = (point: any) => {
+    const groupCaseVal = searchParams.get("groupCase") || "";
+    const q: Record<string, string> = {
+      kind: "referBack",
+      hospital: hospitalParam || "",
+      hospitalID: hospitalIDParam || "",
+      referPoint: String(point.id),
+      deliveryPoint: "true",
+      docter_branch: "true",
+      groupCase: groupCaseVal,
+    };
+    // Pass referPoint info for form display
+    if (point.name) q.referPointName = point.name;
+    if (point.phone) q.referPointPhone = point.phone;
+    if (point.phone2) q.referPointPhone2 = point.phone2;
+    router.push(`/create/opd?${buildQuery(q)}`);
+  };
+
+  // ReferBack: re-fetch referPoints when landing on the refer point selection step
+  const referPointParam = searchParams.get("referPoint");
+  const showReferPointStep = !!(isReferBack && hospitalParam && deliveryPointParam && !doctorBranchParam && !branchNamesParam);
+  useEffect(() => {
+    if (showReferPointStep && rbReferPoints.length === 0 && hospitalIDParam) {
+      // Page was reloaded — re-fetch referPoint data
+      checkReferPointHospital({ hospital: hospitalIDParam, useFor: "จุดรับใบส่งตัว", isOpd: true, isActive: true })
+        .then((res: any) => { setRbReferPoints(Array.isArray(res) ? res : []); })
+        .catch(() => { setRbReferPoints([]); });
+    }
+  }, [showReferPointStep, hospitalIDParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wrap updateFormData to clear validation errors on field change
   const handleUpdateFormData = useCallback((data: any) => {
@@ -116,7 +379,7 @@ function OPDReferralInner() {
   // Title
   const title = useMemo(() => {
     if (kind === "referOut") return "ส่งตัวผู้ป่วยนอก (OPD)";
-    if (kind === "referBack") return "ส่งตัวผู้ป่วยกลับ (OPD)";
+    if (kind === "referBack") return "ส่งตัวผู้ป่วยกลับ OPD";
     return "สร้างใบส่งตัว OPD";
   }, [kind]);
 
@@ -135,6 +398,32 @@ function OPDReferralInner() {
       if (info) try { setPatientInfo(JSON.parse(info)); } catch { /* */ }
     }
   }, []);
+
+  // Load groupCase data for referBack (matches Nuxt getFindOneGroupCase)
+  useEffect(() => {
+    if (!groupCaseParam || !isReferBack) return;
+    (async () => {
+      try {
+        const res = await findGroupCase(groupCaseParam);
+        const docs = res?.referralDocuments;
+        const doc = Array.isArray(docs) ? docs[0] : docs;
+        if (doc) {
+          setReferGroupCase(doc);
+          const patient = doc.data?.patient;
+          const hcodeSub = doc.data?.visitData?.hcode_sub;
+          setReferGroupCasePatient({
+            ...patient,
+            hcode_sub: hcodeSub,
+            patient_hn: doc.HN,
+            patient_vn: doc.AN,
+            patient_an: doc.VN,
+          });
+        }
+      } catch (err) {
+        console.error("getFindOneGroupCase error:", err);
+      }
+    })();
+  }, [groupCaseParam, isReferBack, findGroupCase]);
 
   // Parse draft ID from JSON string (e.g. '{"id":123}') or plain number string
   const parsedDraftId = useMemo(() => {
@@ -384,16 +673,19 @@ function OPDReferralInner() {
     })}`);
   };
 
-  // Doctor branch next
+  // Doctor branch next — matches Nuxt: preserves all existing URL params + adds branch_names/branch_ids
   const handleDoctorBranchNext = (branches: DoctorBranchOption[]) => {
     const branchNames = branches.map((b) => b.name).join(",");
-    router.push(`/create/opd?${buildQuery({
-      hospital: hospitalParam!,
-      hospitalID: hospitalIDParam || "",
-      deliveryPoint: "true",
-      docter_branch: "true",
-      branch_names: branchNames,
-    })}`);
+    const branchIds = branches.map((b) => String(b.value || "")).join(",");
+    // Preserve all existing search params (kind, groupCase, referPoint, hospital, etc.)
+    const existing: Record<string, string> = {};
+    searchParams.forEach((value, key) => { existing[key] = value; });
+    const q: Record<string, string> = {
+      ...existing,
+      branch_names: branchNames || "ไม่ระบุสาขา",
+    };
+    if (branchIds) q.branch_ids = branchIds;
+    router.push(`/create/opd?${buildQuery(q)}`);
   };
 
   // Save
@@ -688,11 +980,12 @@ function OPDReferralInner() {
           await createReferralDocument(payload);
         }
 
-        // Show success toast then redirect to refer-out/all
+        // Show success toast then redirect based on kind
         const msg = saveType === "draft" ? "บันทึกฉบับร่างเรียบร้อย" : "บันทึกและส่งตัวเรียบร้อย";
         setSuccessToast({ open: true, message: msg });
+        const redirectPath = kind === "referBack" ? "/refer-back/all" : "/refer-out/all";
         setTimeout(() => {
-          router.push("/refer-out/all");
+          router.push(redirectPath);
         }, 1500);
       } catch (err: any) {
         console.error("Save error:", err);
@@ -806,8 +1099,155 @@ function OPDReferralInner() {
       {/* Breadcrumbs */}
       <BreadcrumbsRefer basePath="/create/opd" kind={kind} items={breadcrumbItems} />
 
-      {/* Step 1: Hospital selection with filter + table + pagination */}
-      {!hospitalParam && (
+      {/* Step 1 (referBack): Referral list selection */}
+      {isReferBack && !hospitalParam && (() => {
+        const rbTotalPages = Math.max(1, Math.ceil(rbTotal / rbLimit));
+        const rbPageNumbers: (number | "...")[] = [];
+        if (rbTotalPages <= 7) {
+          for (let i = 1; i <= rbTotalPages; i++) rbPageNumbers.push(i);
+        } else {
+          rbPageNumbers.push(1);
+          if (rbPage > 3) rbPageNumbers.push("...");
+          const start = Math.max(2, rbPage - 1);
+          const end = Math.min(rbTotalPages - 1, rbPage + 1);
+          for (let i = start; i <= end; i++) rbPageNumbers.push(i);
+          if (rbPage < rbTotalPages - 2) rbPageNumbers.push("...");
+          rbPageNumbers.push(rbTotalPages);
+        }
+        return (
+          <Box sx={{ mt: 3 }}>
+            {/* Filters */}
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr auto" }, gap: 2, mb: 3 }}>
+              <Box>
+                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>ค้นหาชื่อผู้ป่วย</Typography>
+                <TextField size="small" fullWidth placeholder="ชื่อ-นามสกุล, HN" value={rbSearchName} onChange={(e) => handleRbSearchName(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: "#9ca3af" }} /></InputAdornment> }} />
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>ค้นหาหมายเลขใบส่งตัว</Typography>
+                <TextField size="small" fullWidth placeholder="ค้นหา No" value={rbSearchNo} onChange={(e) => handleRbSearchNo(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: "#9ca3af" }} /></InputAdornment> }} />
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>ค้นหาสถานพยาบาลต้นทาง</Typography>
+                <TextField size="small" fullWidth placeholder="ค้นหาสถานพยาบาล" value={rbSearchHospital} onChange={(e) => handleRbSearchHospital(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: "#9ca3af" }} /></InputAdornment> }} />
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-end" }}>
+                <Button variant="outlined" onClick={handleRbClearFilters} sx={{ height: 40, textTransform: "none", borderColor: "#d1d5db", color: "#374151", whiteSpace: "nowrap", px: 3 }}>
+                  ล้างตัวกรอง
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Table */}
+            <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #e5e7eb" }}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "#036245" }}>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center", width: 180 }}>No</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>วันที่/เวลาที่ส่งตัว</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>ชื่อผู้ป่วย</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>สถานพยาบาลปลายทาง</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>ระยะเวลารับรองสิทธิ์</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>สถานะใบส่งตัว</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center" }}>เวลาดำเนินการ</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#fff", textAlign: "center", width: 100 }}>เลือก</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rbItems.map((item: any) => {
+                    const patient = item.data?.patient || {};
+                    const patientName = `${patient.patient_firstname || ""} ${patient.patient_lastname || ""}`.trim() || "-";
+                    const elapsed = getElapsedTime(item.createdAt, item.updatedAt, item.referralStatus?.name || "");
+                    const isOverdue = item.referralStatus?.name === "รอตอบรับ" && elapsed.includes("ที่แล้ว");
+                    return (
+                      <TableRow key={item.id} hover sx={{ borderBottom: "1px solid #e5e7eb", "&:hover": { bgcolor: "#f0fdf4" } }}>
+                        <TableCell align="center"><Typography variant="body2">{item.runNumber || "-"}</Typography></TableCell>
+                        <TableCell align="center"><Typography variant="body2">{formatThaiDateTimeIntl(item.createdAt)}</Typography></TableCell>
+                        <TableCell align="center"><Typography variant="body2">{patientName}</Typography></TableCell>
+                        <TableCell align="center"><Typography variant="body2">{item.fromHospital?.name || "-"}</Typography></TableCell>
+                        <TableCell align="center"><Typography variant="body2">{item.subType?.name || "ไม่มีประเภท"}</Typography></TableCell>
+                        <TableCell align="center">
+                          {item.referralStatus?.name && (
+                            <Box component="span" sx={{
+                              display: "inline-block", px: 1.5, py: 0.5, borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600,
+                              ...(item.referralStatus.name === "รับเข้ารักษา"
+                                ? { bgcolor: "#22C55E", color: "#fff" }
+                                : item.referralStatus.name === "รอตอบรับ"
+                                  ? { bgcolor: "#FEFCE8", color: "#EAB308" }
+                                  : item.referralStatus.name === "ยกเลิก"
+                                    ? { bgcolor: "#FEF2F2", color: "#EF4444" }
+                                    : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
+                            }}>
+                              {item.referralStatus.name}
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography variant="body2" sx={{ color: isOverdue ? "#EF4444" : "inherit" }}>{elapsed}</Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button variant="contained" size="small" onClick={() => handleSelectReferBack(item)}
+                            sx={{ bgcolor: "#00AF75", "&:hover": { bgcolor: "#036245" }, textTransform: "none", minWidth: 60, borderRadius: "6px" }}>
+                            เลือก
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {rbItems.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body2" color="textSecondary">ไม่พบข้อมูลใบส่งตัว</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Pagination */}
+            <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", mt: 2, gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="body2" sx={{ color: "#6b7280" }}>แถวต่อหน้า</Typography>
+                <FormControl size="small" sx={{ minWidth: 70 }}>
+                  <Select value={rbLimit} onChange={(e) => handleRbLimitChange(Number(e.target.value))} sx={{ fontSize: "0.875rem", height: 32 }}>
+                    <MenuItem value={5}>5</MenuItem>
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={20}>20</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </FormControl>
+                <Typography variant="body2" sx={{ color: "#6b7280" }}>ทั้งหมด {rbTotal} รายการ</Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Button size="small" disabled={rbPage <= 1} onClick={() => handleRbPageChange(rbPage - 1)} sx={{ minWidth: 32, p: 0.5, color: "#6b7280" }}>
+                  <PrevIcon fontSize="small" />
+                </Button>
+                {rbPageNumbers.map((p, idx) =>
+                  p === "..." ? (
+                    <Typography key={`dots-${idx}`} variant="body2" sx={{ px: 0.5, color: "#6b7280" }}>...</Typography>
+                  ) : (
+                    <Button key={p} size="small" onClick={() => handleRbPageChange(p as number)}
+                      sx={{ minWidth: 32, height: 32, p: 0, borderRadius: "6px", fontWeight: rbPage === p ? 700 : 400,
+                        bgcolor: rbPage === p ? "#00AF75" : "transparent", color: rbPage === p ? "#fff" : "#374151",
+                        "&:hover": { bgcolor: rbPage === p ? "#036245" : "#f3f4f6" } }}>
+                      {p}
+                    </Button>
+                  )
+                )}
+                <Button size="small" disabled={rbPage >= rbTotalPages} onClick={() => handleRbPageChange(rbPage + 1)} sx={{ minWidth: 32, p: 0.5, color: "#6b7280" }}>
+                  <NextIcon fontSize="small" />
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        );
+      })()}
+
+      {/* Step 1 (referOut): Hospital selection with filter + table + pagination */}
+      {!isReferBack && !hospitalParam && (
         <Box sx={{ mt: 3 }}>
           {/* Filters row - matching Nuxt layout */}
           <Box
@@ -1084,10 +1524,119 @@ function OPDReferralInner() {
         <DeliveryPointSelector hospitalId={hospitalIDParam || ""} kind={kind} onNext={handleDeliveryPointNext} onBack={() => router.push(`/create/opd?kind=${kind}`)} />
       )}
 
+      {/* Step 2.5 (ReferBack only): Select ReferPoint — matches Nuxt SelectReferPoints */}
+      {showReferPointStep && (
+        <Box sx={{ mt: 3, pb: 16 }}>
+          {rbReferPoints.length > 0 ? (
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }, gap: 2, mt: 2 }}>
+              {rbReferPoints.map((point: any) => (
+                <Box
+                  key={point.id}
+                  onClick={() => handleSelectReferPoint(point)}
+                  sx={{
+                    display: "flex", alignItems: "center", p: 3, borderRadius: "16px", bgcolor: "#fff", cursor: "pointer",
+                    boxShadow: "0px 10px 8px rgba(0,0,0,0.04), 0px 4px 3px rgba(0,0,0,0.1)",
+                    "&:hover": { boxShadow: "0px 10px 15px rgba(0,0,0,0.1)" },
+                  }}
+                >
+                  {/* Map pin icon */}
+                  <Box sx={{ width: 48, height: 48, borderRadius: "50%", bgcolor: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, mr: 2 }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#036245" />
+                      <circle cx="12" cy="9" r="2.5" fill="#fff" />
+                      <rect x="11.25" y="7" width="1.5" height="4" rx="0.5" fill="#036245" />
+                      <rect x="10" y="8.25" width="4" height="1.5" rx="0.5" fill="#036245" />
+                    </svg>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontWeight: 700, color: "#111827" }}>{point.name}</Typography>
+                    <Typography variant="caption" sx={{ color: "#9ca3af" }}>{point.phone || ""}</Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: "center", py: 8, bgcolor: "#f9fafb", borderRadius: 2 }}>
+              <Typography sx={{ fontWeight: 600, color: "#6b7280", mb: 1 }}>ไม่พบจุดรับใบส่งตัว</Typography>
+              <Typography variant="body2" color="textSecondary">โรงพยาบาลนี้ยังไม่มีจุดรับใบส่งตัวที่กำหนดไว้</Typography>
+            </Box>
+          )}
+          <Box sx={{ mt: 3 }}>
+            <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => router.push(`/create/opd?kind=referBack`)}
+              sx={{ color: "#6b7280", borderColor: "#d1d5db", textTransform: "none" }}>ยกเลิก</Button>
+          </Box>
+        </Box>
+      )}
+
       {/* Step 3: Doctor Branch */}
       {hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam && (
         <DoctorBranchSelector hospitalId={hospitalIDParam || ""} hospitalName={hospitalParam} kind={kind} onNext={handleDoctorBranchNext}
           onBack={() => router.push(`/create/opd?${buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "", deliveryPoint: "true" })}`)} />
+      )}
+
+      {/* ReferBack: "ใบส่งตัวเดิม" panel — matches Nuxt ReferGroupCasePanel */}
+      {isFormStep && isReferBack && referGroupCase && referInfo?.referralStatus?.name !== "ฉบับร่าง" && (
+        <Paper sx={{ mt: 3, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 500, color: "#111827", mb: 2 }}>ใบส่งตัวเดิม</Typography>
+          <TableContainer sx={{ border: "1px solid #e5e7eb", borderRadius: "8px" }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ borderBottom: "1px solid #e5e7eb" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>No</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>วัน/เวลาที่ส่งตัว</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>เลขบัตรประชาชน</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>ชื่อผู้ป่วย</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>สถานพยาบาลต้นทาง</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>ระยะเวลารับรองสิทธิ์</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#374151" }}>สถานะใบส่งตัว</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell>{referGroupCase.runNumber || "-"}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{formatStartDateThai(referGroupCase.createdAt)}</Typography>
+                    <Typography variant="caption" sx={{ color: "#6b7280" }}>{extractTimeFromISO(referGroupCase.createdAt)}</Typography>
+                  </TableCell>
+                  <TableCell sx={{ color: "#2563eb" }}>{referGroupCase.data?.patient?.patient_pid || "-"}</TableCell>
+                  <TableCell>
+                    {[referGroupCase.data?.patient?.patient_firstname, referGroupCase.data?.patient?.patient_lastname].filter(Boolean).join(" ") || "-"}
+                  </TableCell>
+                  <TableCell>{referGroupCase.fromHospital?.name || "-"}</TableCell>
+                  <TableCell>
+                    {referGroupCase.deliveryPeriod?.length > 0 ? referGroupCase.deliveryPeriod.map((period: any, idx: number) => (
+                      <Box key={idx} sx={{ mb: idx < referGroupCase.deliveryPeriod.length - 1 ? 1 : 0 }}>
+                        <Typography variant="body2">เริ่มต้น : {formatStartDateThai(period.startDelivery)}-{formatEndTime(period.startDelivery)}</Typography>
+                        <Typography variant="body2">หมดอายุ : {formatStartDateThai(period.endDelivery)}-{formatEndTime(period.endDelivery)}</Typography>
+                      </Box>
+                    )) : (
+                      <Box>
+                        <Typography variant="body2">เริ่มต้น : -</Typography>
+                        <Typography variant="body2">หมดอายุ : -</Typography>
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {referGroupCase.referralStatus?.name && (
+                      <Box component="span" sx={{
+                        display: "inline-block", px: 1.5, py: 0.5, borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600,
+                        ...(referGroupCase.referralStatus.name === "รับเข้ารักษา"
+                          ? { bgcolor: "#22C55E", color: "#fff" }
+                          : referGroupCase.referralStatus.name === "รอตอบรับ"
+                            ? { bgcolor: "#FEFCE8", color: "#EAB308" }
+                            : referGroupCase.referralStatus.name === "ยกเลิก"
+                              ? { bgcolor: "#FEF2F2", color: "#EF4444" }
+                              : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
+                      }}>
+                        {referGroupCase.referralStatus.name}
+                      </Box>
+                    )}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
 
       {/* Step 4: Referral Form — reuse the full RequestReferralForm component (matching Nuxt layout) */}
@@ -1102,6 +1651,8 @@ function OPDReferralInner() {
             onUpdate={handleUpdateFormData}
             formErrors={formErrors}
             draftLoaded={draftLoaded}
+            referGroupCasePatient={isReferBack ? referGroupCasePatient : undefined}
+            referGroupCase={isReferBack ? referGroupCase : undefined}
           />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>

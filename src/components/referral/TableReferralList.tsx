@@ -106,23 +106,28 @@ function formatDx(dx: string | undefined | null): string {
   return dx.length > 27 ? dx.slice(0, 27) + "..." : dx;
 }
 
-// Status badge colors — mirrors Nuxt StatusBadge
+// Status badge colors — mirrors Nuxt StatusBadge + base-badge-label variants
 const STATUS_STYLES: Record<
   string,
-  { bg: string; color: string; border: string }
+  { bg: string; color: string; border?: string }
 > = {
-  รอตอบรับ: { bg: "#FFF7ED", color: "#F97316", border: "#F97316" },
-  ตอบรับ: { bg: "#F0FDF4", color: "#22C55E", border: "#22C55E" },
-  ปฏิเสธ: { bg: "#FEF2F2", color: "#EF4444", border: "#EF4444" },
-  ยืนยันนัดหมาย: { bg: "#EFF6FF", color: "#3B82F6", border: "#3B82F6" },
-  เปลี่ยนแปลงนัดหมาย: { bg: "#EFF6FF", color: "#3B82F6", border: "#3B82F6" },
-  สำเร็จ: { bg: "#F0FDF4", color: "#16A34A", border: "#16A34A" },
-  ยกเลิก: { bg: "#F5F5F5", color: "#6B7280", border: "#6B7280" },
-  ฉบับร่าง: { bg: "#FFFBEB", color: "#D97706", border: "#D97706" },
+  ฉบับร่าง:             { bg: "#E0E0E0", color: "#616161" },              // default
+  รอตอบรับ:             { bg: "#FEF1CC", color: "#DC4040" },              // warn_danger
+  ยืนยันนัดหมาย:        { bg: "#EBF6FF", color: "#0D8CEE" },              // info
+  เปลี่ยนแปลงนัดหมาย:    { bg: "#FEF1CC", color: "#F47A00" },              // warning
+  รับเข้ารักษา:          { bg: "#DAEEE0", color: "#139539" },              // success
+  ตอบรับ:               { bg: "#DAEEE0", color: "#139539" },              // success (alias)
+  ปฏิเสธ:               { bg: "#FEF2F2", color: "#DC4040" },              // danger
+  ปฎิเสธ:               { bg: "#FEF2F2", color: "#DC4040" },              // danger (typo variant)
+  ปฏิเสธการตอบรับ:       { bg: "#FEF2F2", color: "#DC4040" },              // danger
+  ยกเลิก:               { bg: "#FEF2F2", color: "#DC4040" },              // danger
+  สิ้นสุดการส่งตัว:       { bg: "#139539", color: "#FFFFFF" },              // success-solid
+  สำเร็จ:               { bg: "#139539", color: "#FFFFFF" },              // success-solid (alias)
+  นัดรักษาต่อเนื่อง:     { bg: "#F0FDF4", color: "#22C55E" },              // refer-continue
 };
 
 function StatusBadge({ status }: { status?: string }) {
-  const s = STATUS_STYLES[status || ""] || STATUS_STYLES["รอตอบรับ"];
+  const s = STATUS_STYLES[status || ""] || { bg: "#E0E0E0", color: "#616161" };
   return (
     <Chip
       label={status || "-"}
@@ -130,8 +135,11 @@ function StatusBadge({ status }: { status?: string }) {
       sx={{
         bgcolor: s.bg,
         color: s.color,
-        border: `1px solid ${s.border}`,
-        fontWeight: 500,
+        fontWeight: 400,
+        fontSize: 14,
+        borderRadius: "9999px",
+        height: 32,
+        border: "none",
       }}
     />
   );
@@ -372,7 +380,7 @@ export default function TableReferralList({
                 <span>
                   <IconButton
                     size="small"
-                    sx={{ bgcolor: "#EAB308", color: "#fff", "&:hover": { bgcolor: "#CA8A04" } }}
+                    sx={{ bgcolor: "#EAB308", color: "#fff", "&:hover": { bgcolor: "#856504" } }}
                     disabled={loading}
                     onClick={() => onAction?.("edit", item)}
                   >
@@ -388,7 +396,7 @@ export default function TableReferralList({
                     <span>
                       <IconButton
                         size="small"
-                        sx={{ bgcolor: "#EAB308", color: "#fff", "&:hover": { bgcolor: "#CA8A04" } }}
+                        sx={{ bgcolor: "#EAB308", color: "#fff", "&:hover": { bgcolor: "#856504" } }}
                         disabled={loading}
                         onClick={() => onAction?.("edit", item)}
                       >
@@ -401,7 +409,7 @@ export default function TableReferralList({
                   <span>
                     <IconButton
                       size="small"
-                      sx={{ bgcolor: "#036245", color: "#fff", "&:hover": { bgcolor: "#024D37" } }}
+                      sx={{ bgcolor: "#3B82F6", color: "#fff", "&:hover": { bgcolor: "#1C3D73" } }}
                       disabled={loading}
                       onClick={() => onAction?.("read", item)}
                     >
@@ -413,7 +421,7 @@ export default function TableReferralList({
                   <span>
                     <IconButton
                       size="small"
-                      sx={{ bgcolor: "#A855F7", color: "#fff", "&:hover": { bgcolor: "#9333EA" } }}
+                      sx={{ bgcolor: "#A955F7", color: "#fff", "&:hover": { bgcolor: "#69339C" } }}
                       disabled={loading}
                       onClick={() => onAction?.("history", item)}
                     >

@@ -398,6 +398,8 @@ interface Props {
   onUpdate: (partial: Record<string, any>) => void;
   formErrors?: Record<string, string>;
   draftLoaded?: number; // counter that increments when draft data is loaded
+  referGroupCasePatient?: any; // patient data from referBack groupCase
+  referGroupCase?: any; // original referral document from groupCase
 }
 
 export default function RequestReferralForm({
@@ -409,6 +411,8 @@ export default function RequestReferralForm({
   onUpdate,
   formErrors = {},
   draftLoaded = 0,
+  referGroupCasePatient,
+  referGroupCase,
 }: Props) {
   // Local form state merged with external (only non-empty external values override defaults)
   const [form, setForm] = useState<ReferralFormData>(() => {
@@ -495,6 +499,37 @@ export default function RequestReferralForm({
       }
     }
   }, [draftLoaded, externalFormData]);
+
+  // Pre-fill patient data from referBack groupCase
+  useEffect(() => {
+    if (!referGroupCasePatient) return;
+    const p = referGroupCasePatient;
+    const patientFields: Partial<ReferralFormData> = {};
+    if (p.patient_prefix) patientFields.patient_prefix = p.patient_prefix;
+    if (p.patient_firstname) patientFields.patient_firstname = p.patient_firstname;
+    if (p.patient_lastname) patientFields.patient_lastname = p.patient_lastname;
+    if (p.patient_pid) patientFields.patient_pid = p.patient_pid;
+    if (p.patient_hn) patientFields.patient_hn = p.patient_hn;
+    if (p.patient_an) patientFields.patient_an = p.patient_an;
+    if (p.patient_vn) patientFields.patient_vn = p.patient_vn;
+    if (p.patient_age) patientFields.patient_age = String(p.patient_age);
+    if (p.patient_sex || p.patient_gender) patientFields.patient_sex = p.patient_sex || p.patient_gender;
+    if (p.patient_birthday || p.patient_dob) patientFields.patient_birthday = p.patient_birthday || p.patient_dob;
+    if (p.patient_phone) patientFields.patient_phone = p.patient_phone;
+    if (p.patient_blood_group) patientFields.patient_blood_group = p.patient_blood_group;
+    // Address fields
+    if (p.patient_house) patientFields.patient_house = p.patient_house;
+    if (p.patient_moo) patientFields.patient_moo = p.patient_moo;
+    if (p.patient_road) patientFields.patient_road = p.patient_road;
+    if (p.patient_alley) patientFields.patient_alley = p.patient_alley;
+    if (p.patient_tambon) patientFields.patient_tambon = p.patient_tambon;
+    if (p.patient_amphur) patientFields.patient_amphur = p.patient_amphur;
+    if (p.patient_changwat) patientFields.patient_changwat = p.patient_changwat;
+    if (p.patient_zipcode) patientFields.patient_zipcode = p.patient_zipcode;
+
+    setForm((prev) => ({ ...prev, ...patientFields }));
+    onUpdate(patientFields);
+  }, [referGroupCasePatient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = useCallback(
     (field: keyof ReferralFormData, value: any) => {

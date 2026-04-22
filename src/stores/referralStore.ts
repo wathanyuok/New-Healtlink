@@ -129,8 +129,14 @@ export const useReferralStore = create<ReferralState>(() => ({
     apiGet("main-service/medicine/findAndCount", params),
 
   // Delivery point & Doctor branch
-  checkReferPointHospital: (params) =>
-    apiGet("main-service/referral/deliveryPointTypeStart/find", params),
+  checkReferPointHospital: async (params) => {
+    const res = await apiGet("main-service/referral/deliveryPointTypeStart/find", params);
+    // Unwrap: API returns { status, referralDeliveryPointTypeStarts: [...] }
+    if (res && Array.isArray(res.referralDeliveryPointTypeStarts)) {
+      return res.referralDeliveryPointTypeStarts;
+    }
+    return [];
+  },
   checkDoctorBranch: (params) =>
     apiGet("main-service/doctor/branch/find", params),
 }));

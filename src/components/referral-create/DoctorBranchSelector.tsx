@@ -192,43 +192,50 @@ export default function DoctorBranchSelector({
   onNext,
   onBack,
 }: DoctorBranchSelectorProps) {
-  const { doctorBranches, fetchDoctorBranchList, loading } = useReferralCreateStore();
+  const { doctorBranches, fetchDoctorBranchList } = useReferralCreateStore();
   const [selected, setSelected] = useState<SelectedDept[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(30); // Show 30 items initially
   const [validationErrors, setValidationErrors] = useState<Record<number, { date?: boolean; time?: boolean }>>({});
   const [errorMsg, setErrorMsg] = useState("");
+  const [branchesFetched, setBranchesFetched] = useState(false);
 
   useEffect(() => {
-    // Match Nuxt: role-based hospital logic for doctor branches
-    const authState = useAuthStore.getState();
-    const roleName = authState.getRoleName();
-
-    let hospitals: string | undefined;
-
-    // Match Nuxt: superAdmin tries own hospital first, then option_hospital
-    const ownHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id;
-
-    if (roleName === "superAdmin") {
-      // superAdmin: use own hospital from profile first, fallback to option_hospital
-      const idHos = ownHospitalId ? String(ownHospitalId) : undefined;
-      hospitals = (idHos ?? (authState.optionHospital ? String(authState.optionHospital) : undefined));
-    } else if (roleName === "superAdminZone" || roleName === "superAdminHospital") {
-      // Zone/Hospital admin: use own hospital from profile
-      hospitals = ownHospitalId ? String(ownHospitalId) : undefined;
-    }
-
+    // Match Nuxt: use hospitalID from URL (route.query.hospitalID) directly
     const params: any = {
       offset: 1,
       limit: 0, // Nuxt uses limit=0 to get ALL branches
       isOpd: true,
       isActive: true,
     };
-    if (hospitals) params.hospital = hospitals;
+    if (hospitalId) params.hospital = String(hospitalId);
 
-    fetchDoctorBranchList(params);
+    setBranchesFetched(false);
+    fetchDoctorBranchList(params).then(() => {
+      setBranchesFetched(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hospitalId, kind]);
+
+  // Auto-skip: match Nuxt watcher on docterBranchData
+  // 0 branches → proceed with "ไม่ระบุสาขา"
+  // 1 branch → auto-select and proceed to form
+  // >1 branches → show selector (no auto-skip)
+  const autoSkippedRef = useRef(false);
+  useEffect(() => {
+    if (!branchesFetched || autoSkippedRef.current) return;
+    if (doctorBranches.length === 0) {
+      // No branches available — skip with empty marker (matches Nuxt branch_names="ไม่ระบุสาขา")
+      autoSkippedRef.current = true;
+      onNext([]);
+    } else if (doctorBranches.length === 1) {
+      // Only 1 branch — auto-select and proceed (matches Nuxt watcher)
+      autoSkippedRef.current = true;
+      const branch = doctorBranches[0];
+      onNext([branch]);
+    }
+    // >1 branches → do nothing, show selector
+  }, [doctorBranches, branchesFetched]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter branches by search query
   const allFilteredBranches = useMemo(() => {
@@ -394,7 +401,7 @@ export default function DoctorBranchSelector({
       </Box>
 
       {/* Card grid - 3 columns matching Nuxt */}
-      {loading ? (
+      {!branchesFetched ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
           <Box sx={{ textAlign: "center" }}>
             <CircularProgress sx={{ color: "#00AF75" }} />
@@ -495,7 +502,7 @@ export default function DoctorBranchSelector({
       )}
 
       {/* Load more button */}
-      {hasMore && !loading && (
+      {hasMore && branchesFetched && (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
           <Button
             variant="outlined"

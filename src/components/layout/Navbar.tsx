@@ -24,7 +24,10 @@ export default function Navbar() {
   const { profile, logout, setOptionHospital } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [selectedHospital, setSelectedHospital] = useState<string>("");
+  const initHospital = useAuthStore((s) => s.optionHospital);
+  const [selectedHospital, setSelectedHospital] = useState<string>(
+    initHospital ? String(initHospital) : ""
+  );
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
 

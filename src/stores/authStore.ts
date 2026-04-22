@@ -36,11 +36,22 @@ interface AuthState {
   getRoleName: () => string;
 }
 
+// Read selectedHospital from localStorage or cookie (Nuxt sets cookie)
+function getSavedHospital(): number | null {
+  if (typeof window === "undefined") return null;
+  const ls = localStorage.getItem("selectedHospital");
+  if (ls) return Number(ls);
+  // Fallback: read cookie (shared with Nuxt on same domain)
+  const match = document.cookie.match(/(?:^|;\s*)selectedHospital=([^;]*)/);
+  if (match && match[1]) return Number(match[1]);
+  return null;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Don't read localStorage during store creation (SSR-safe)
   token: null,
   profile: null,
-  optionHospital: null,
+  optionHospital: getSavedHospital(),
   loading: false,
 
   setToken: (token) => {
@@ -51,7 +62,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setProfile: (profile) => set({ profile }),
-  setOptionHospital: (id) => set({ optionHospital: id }),
+  setOptionHospital: (id) => {
+    if (typeof window !== "undefined") {
+      if (id !== null && id !== undefined) {
+        localStorage.setItem("selectedHospital", String(id));
+      } else {
+        localStorage.removeItem("selectedHospital");
+      }
+    }
+    set({ optionHospital: id });
+  },
 
   login: async (username, password) => {
     set({ loading: true });
@@ -100,6 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
+      localStorage.removeItem("selectedHospital");
       window.location.href = "/login";
     }
     set({ token: null, profile: null, optionHospital: null });
