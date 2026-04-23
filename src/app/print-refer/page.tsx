@@ -19,6 +19,21 @@ function fmtDateThai(d: any): string {
     return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${buddhistYear}`;
   } catch { return "-"; }
 }
+/** Format ISO → "dd/mm/yyyy - HH:MM น." (strip timezone, local time — matches Nuxt formatThaiDateTimeLocal) */
+function fmtDateTimeThai(d: any): string {
+  if (!d || typeof d !== "string") return "-";
+  try {
+    const local = d.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
+    const date = new Date(local);
+    if (isNaN(date.getTime())) return "-";
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yyyy = date.getFullYear() + 543;
+    const hh = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy} - ${hh}:${min} น.`;
+  } catch { return "-"; }
+}
 function fmtTimeThai(d: any): string {
   if (!d || typeof d !== "string") return "-";
   try {
@@ -335,7 +350,7 @@ function PrintReferPageInner() {
               <>
                 <div style={{ flex: 1 }}>
                   <div style={S.label}>วัน/เวลานัดหมาย</div>
-                  {appointments.map((a: any, i: number) => <div key={i} style={{ marginBottom: "4px" }}>{a.appointmentType === "รอนัดรักษาต่อเนื่อง" ? "รอนัดรักษาต่อเนื่อง" : fmtDateThai(a.appointmentDate)}</div>)}
+                  {appointments.map((a: any, i: number) => <div key={i} style={{ marginBottom: "4px" }}>{a.appointmentType === "รอนัดรักษาต่อเนื่อง" ? "รอนัดรักษาต่อเนื่อง" : fmtDateTimeThai(a.appointmentDate)}</div>)}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={S.label}>หมายเหตุ</div>
@@ -419,14 +434,14 @@ function PrintReferPageInner() {
           <div style={S.separator}>
             <table style={S.table}>
               <thead><tr><th style={S.th}>วัคซีนล่าสุด</th><th style={S.th}>วันที่ได้รับ</th><th style={S.th}>สถานที่รับ</th></tr></thead>
-              <tbody>{vaccines.map((vc: any, i: number) => <tr key={i}><td style={S.td}>{i + 1}. {vc.vaccineName || "-"}</td><td style={S.td}>{vc.date ? fmtDateThai(vc.date) : "-"}</td><td style={S.td}>{vc.location || "-"}</td></tr>)}</tbody>
+              <tbody>{vaccines.map((vc: any, i: number) => <tr key={i}><td style={S.td}>{vc.vaccineName || "-"}</td><td style={S.td}>{vc.date ? fmtDateThai(vc.date) : "-"}</td><td style={S.td}>{vc.location || "-"}</td></tr>)}</tbody>
             </table>
           </div>
         )}
         {vaccinesCovid.length > 0 && (
           <table style={{ ...S.table, marginBottom: "8px" }}>
             <thead><tr><th style={S.th}>วัคซีนโควิด</th><th style={S.th}>วันที่ได้รับ</th><th style={S.th}>สถานที่รับ</th></tr></thead>
-            <tbody>{vaccinesCovid.map((vc: any, i: number) => <tr key={i}><td style={S.td}>{i + 1}. {vc.name || vc.vaccineName || "-"}</td><td style={S.td}>{vc.date ? fmtDateThai(vc.date) : "-"}</td><td style={S.td}>{vc.location || "-"}</td></tr>)}</tbody>
+            <tbody>{vaccinesCovid.map((vc: any, i: number) => <tr key={i}><td style={S.td}>{vc.name || vc.vaccineName || "-"}</td><td style={S.td}>{vc.date ? fmtDateThai(vc.date) : "-"}</td><td style={S.td}>{vc.location || "-"}</td></tr>)}</tbody>
           </table>
         )}
         <div style={S.separator} />

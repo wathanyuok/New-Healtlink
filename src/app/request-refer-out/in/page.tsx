@@ -90,6 +90,25 @@ function fmtDateThaiDirect(d: any): string {
   } catch { return "-"; }
 }
 
+/**
+ * Format ISO date to Thai Buddhist era datetime "dd/mm/yyyy - HH:MM น."
+ * Mirrors Nuxt formatThaiDateTimeLocal — strips timezone, treats as local.
+ */
+function fmtThaiDateTimeLocal(isoString: any): string {
+  if (!isoString || typeof isoString !== "string") return "-";
+  try {
+    const localTimeString = isoString.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
+    const date = new Date(localTimeString);
+    if (isNaN(date.getTime())) return "-";
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yyyy = date.getFullYear() + 543;
+    const hh = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy} - ${hh}:${min} น.`;
+  } catch { return "-"; }
+}
+
 /** Extract time from ISO string directly (no timezone conversion) */
 function fmtTimeDirect(d: any): string {
   if (!d || typeof d !== "string") return "-";
@@ -1834,18 +1853,57 @@ function RequestReferOutDetailPageInner() {
                     <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.referralStatusDetailCurrentText || "-"}</Typography>
                   </Box>
 
-                  {/* Hospital branches (destinations) */}
-                  {doc.referralDocumentHospitals && doc.referralDocumentHospitals.length > 0 && (
-                    <Box sx={{ mt: 1, p: 2 }}>
-                      <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, mb: 0.5 }}>รวมรายละเอียด</Typography>
-                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1, border: "1px solid #E5E7EB", borderRadius: 1, p: 1 }}>
-                        {doc.referralDocumentHospitals.map((h: any, hi: number) => (
-                          <React.Fragment key={hi}>
-                            <Typography sx={{ fontSize: "0.8rem" }}>{h.hospital?.name || "-"}</Typography>
-                            <Typography sx={{ fontSize: "0.8rem" }}>{h.doctorBranch?.name || "-"}</Typography>
-                          </React.Fragment>
-                        ))}
-                      </Box>
+                  {/* Appointment table — matches Nuxt referral-info.vue */}
+                  {doc.appointmentData && doc.appointmentData.length > 0 && (
+                    <Box sx={{ p: 2 }}>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                ลำดับ
+                              </TableCell>
+                              <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                สาขา/แผนกที่ส่งต่อ
+                              </TableCell>
+                              {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                  วัน/เวลานัดหมาย
+                                </TableCell>
+                              )}
+                              {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                  หมายเหตุ
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {doc.appointmentData.map((item: any, index: number) => (
+                              <TableRow key={index} sx={{ borderBottom: "1px solid #f3f4f6" }}>
+                                <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                  {index + 1}
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                  {item.doctorBranchName || "-"}
+                                </TableCell>
+                                {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                  <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                    {item.appointmentType === "รอนัดรักษาต่อเนื่อง"
+                                      ? "รอนัดรักษาต่อเนื่อง"
+                                      : fmtThaiDateTimeLocal(item.appointmentDate) || "-"}
+                                  </TableCell>
+                                )}
+                                {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                  <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem", maxWidth: 200, wordBreak: "break-word" }}>
+                                    {item.remark || "-"}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     </Box>
                   )}
                 </Box>
