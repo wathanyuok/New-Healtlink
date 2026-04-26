@@ -65,29 +65,23 @@ export default function DeliveryPointSelector({
   const [skipChecked, setSkipChecked] = useState(false);
 
   useEffect(() => {
-    // Nuxt logic for requestReferOut/referOut:
-    //   superAdmin → uses optionHospital (navbar dropdown), or undefined if not selected
+    // Nuxt logic: both requestReferOut and requestReferBack use the user's own hospital
+    //   requestReferOut → useFor: "จุดรับใบส่งตัว"
+    //   requestReferBack → useFor: "จุดสร้างใบส่งตัว"
+    //   superAdmin → uses optionHospital (navbar dropdown)
     //   normal user → uses user's own hospital from profile
-    // For requestReferBack/referBack → uses target hospitalId with "จุดสร้างใบส่งตัว"
     const isBackFlow = kind === "requestReferBack" || kind === "referBack";
     const useFor = isBackFlow ? "จุดสร้างใบส่งตัว" : "จุดรับใบส่งตัว";
 
+    // Always use the user's own hospital (matches Nuxt handleAction / handleActionReferBack)
+    const authState = useAuthStore.getState();
+    const roleName = authState.getRoleName();
     let fetchHospitalId: string | undefined;
-    if (isBackFlow) {
-      // referBack: use target hospital from URL
-      fetchHospitalId = String(hospitalId);
+    if (roleName === "superAdmin") {
+      fetchHospitalId = authState.optionHospital ? String(authState.optionHospital) : undefined;
     } else {
-      // referOut/requestReferOut: use user's own hospital (Nuxt handleAction logic)
-      const authState = useAuthStore.getState();
-      const roleName = authState.getRoleName();
-      if (roleName === "superAdmin") {
-        // superAdmin uses optionHospital from navbar dropdown; if not set → no hospital filter
-        fetchHospitalId = authState.optionHospital ? String(authState.optionHospital) : undefined;
-      } else {
-        // Normal user uses their own hospital from profile
-        const ownHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id;
-        fetchHospitalId = ownHospitalId ? String(ownHospitalId) : undefined;
-      }
+      const ownHospitalId = (authState.profile as any)?.permissionGroup?.hospital?.id;
+      fetchHospitalId = ownHospitalId ? String(ownHospitalId) : undefined;
     }
 
     const params: any = { useFor };

@@ -62,15 +62,15 @@ function formatThaiDateTimeIntl(isoString: string): string {
   } catch { return "-"; }
 }
 
-/** Format ISO string to Thai Buddhist date only e.g. "12 เม.ย. 2569" */
+/** Format ISO/date string to Thai Buddhist date DD/MM/YYYY e.g. "12/04/2569" */
 function formatStartDateThai(isoString: string): string {
   if (!isoString) return "-";
   try {
-    const date = new Date(isoString);
-    const opts: Intl.DateTimeFormatOptions = {
-      day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Bangkok",
-    };
-    return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", opts).format(date);
+    // Handle both ISO "2026-04-12T23:25:00.000Z" and date-only "2026-04-12"
+    const dateStr = isoString.split("T")[0];
+    const [y, m, d] = (dateStr || "").split("-").map(Number);
+    if (isNaN(y) || isNaN(m) || isNaN(d)) return "-";
+    return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y + 543}`;
   } catch { return "-"; }
 }
 
@@ -83,9 +83,17 @@ function extractTimeFromISO(isoString: string): string {
   } catch { return "-"; }
 }
 
-/** Format end time from ISO string e.g. "23:59" */
+/** Format end time from ISO/date string e.g. "00:00:00" — matches Nuxt format */
 function formatEndTime(isoString: string): string {
-  return extractTimeFromISO(isoString);
+  if (!isoString) return "00:00:00";
+  try {
+    const parts = isoString.split("T");
+    if (parts[1]) {
+      const t = parts[1].replace("Z", "").split("+")[0].split("-")[0];
+      return t.length >= 5 ? (t.length === 5 ? t + ":00" : t.substring(0, 8)) : "00:00:00";
+    }
+    return "00:00:00";
+  } catch { return "00:00:00"; }
 }
 
 /** Elapsed time — matches Nuxt getElapsedTime logic exactly */
@@ -1597,7 +1605,7 @@ function OPDReferralInner() {
                   <TableCell>{referGroupCase.runNumber || "-"}</TableCell>
                   <TableCell>
                     <Typography variant="body2">{formatStartDateThai(referGroupCase.createdAt)}</Typography>
-                    <Typography variant="caption" sx={{ color: "#6b7280" }}>{extractTimeFromISO(referGroupCase.createdAt)}</Typography>
+                    <Typography variant="caption" sx={{ color: "#6b7280", display: "flex", alignItems: "center", gap: 0.5 }}>⏰ {extractTimeFromISO(referGroupCase.createdAt)}</Typography>
                   </TableCell>
                   <TableCell sx={{ color: "#2563eb" }}>{referGroupCase.data?.patient?.patient_pid || "-"}</TableCell>
                   <TableCell>
@@ -1622,12 +1630,14 @@ function OPDReferralInner() {
                       <Box component="span" sx={{
                         display: "inline-block", px: 1.5, py: 0.5, borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600,
                         ...(referGroupCase.referralStatus.name === "รับเข้ารักษา"
-                          ? { bgcolor: "#22C55E", color: "#fff" }
+                          ? { bgcolor: "#dcfce7", color: "#16a34a" }
                           : referGroupCase.referralStatus.name === "รอตอบรับ"
                             ? { bgcolor: "#FEFCE8", color: "#EAB308" }
                             : referGroupCase.referralStatus.name === "ยกเลิก"
                               ? { bgcolor: "#FEF2F2", color: "#EF4444" }
-                              : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
+                              : referGroupCase.referralStatus.name === "ฉบับร่าง"
+                                ? { bgcolor: "#F3F4F6", color: "#6B7280" }
+                                : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
                       }}>
                         {referGroupCase.referralStatus.name}
                       </Box>

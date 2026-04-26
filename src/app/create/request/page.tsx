@@ -48,6 +48,59 @@ import { useAuthStore } from "@/stores/authStore";
 import { useReferralStore } from "@/stores/referralStore";
 
 /* ------------------------------------------------------------------ */
+/*  Helpers — match Nuxt formatting                                    */
+/* ------------------------------------------------------------------ */
+/** Format ISO string to Thai Buddhist date+time e.g. "12 เม.ย. 2569 23:25 น." */
+function formatThaiDateTimeIntl(isoString: string): string {
+  if (!isoString) return "-";
+  try {
+    const date = new Date(isoString);
+    const opts: Intl.DateTimeFormatOptions = {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok",
+    };
+    const formatted = new Intl.DateTimeFormat("th-TH-u-ca-buddhist", opts).format(date);
+    return formatted.replace(",", "") + " น.";
+  } catch { return "-"; }
+}
+
+/** Elapsed time — matches Nuxt getElapsedTime logic */
+function getElapsedTime(createdAt: string, updatedAt: string, referralStatus: string): string {
+  const now = Date.now();
+  if (referralStatus === "ฉบับร่าง") {
+    if (!createdAt) return "-";
+    const diff = now - new Date(createdAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+    if (mins < 60) return `${mins} นาทีที่แล้ว`;
+    const hrs = Math.floor(diff / 3600000);
+    if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+    return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+  }
+  if (referralStatus === "รอตอบรับ") {
+    if (!updatedAt) return "-";
+    const diff = now - new Date(updatedAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+    if (mins >= 15) {
+      if (mins < 60) return `${mins} นาทีที่แล้ว`;
+      const hrs = Math.floor(diff / 3600000);
+      if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+      return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+    }
+    return `${mins} นาที`;
+  }
+  if (!updatedAt) return "-";
+  const diff = now - new Date(updatedAt).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "น้อยกว่าหนึ่งนาที";
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return `${hrs} ชั่วโมงที่แล้ว`;
+  return `${Math.floor(diff / 86400000)} วันที่แล้ว`;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Request Inner                                                      */
 /* ------------------------------------------------------------------ */
 function RequestReferralInner() {
@@ -108,6 +161,9 @@ function RequestReferralInner() {
   const [toastSeverity, setToastSeverity] = useState<"success" | "error">("success");
   const [patientInfo, setPatientInfo] = useState<{ firstname?: string; lastname?: string } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [referGroupCase, setReferGroupCase] = useState<any>(null);
+
+  const groupCaseParam = searchParams.get("groupCase");
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   // Store draft's fromHospital locally (NOT in global optionHospital to avoid Navbar side-effect)
@@ -119,7 +175,7 @@ function RequestReferralInner() {
   const isFormStep = !!(branchNamesParam && doctorBranchParam);
 
   /* ── requestReferBack step-1 state (shows existing referrals to pick) ── */
-  const { findAndCountReferral, checkReferPointHospital } = useReferralStore();
+  const { findAndCountReferral, checkReferPointHospital, findGroupCase } = useReferralStore();
   const profile = useAuthStore((s) => s.profile);
   const optionHospital = useAuthStore((s) => s.optionHospital);
   const [referBackList, setReferBackList] = useState<any[]>([]);
@@ -156,9 +212,9 @@ function RequestReferralInner() {
     async (overrides?: {
       page?: number;
       limit?: number;
-      search?: string;
+      patientSearch?: string;
       runNumberSearch?: string;
-      toHospitalSearch?: string;
+      fromHospitalSearch?: string;
     }) => {
       if (!isRequestReferBack) return;
       const ownHospitalId = (profile as any)?.permissionGroup?.hospital?.id;
@@ -166,13 +222,13 @@ function RequestReferralInner() {
       const params = {
         limit: overrides?.limit ?? referBackLimit,
         offset: overrides?.page ?? referBackPage,
-        search: overrides?.search ?? rbSearch,
+        patientSearch: overrides?.patientSearch ?? rbSearch,
         isTransferred: false,
         referralType: 1,
         referralKind: 3,
         referralStatus: 2,
         runNumberSearch: overrides?.runNumberSearch ?? rbRunNumberSearch,
-        toHospitalSearch: overrides?.toHospitalSearch ?? rbHospitalSearch,
+        fromHospitalSearch: overrides?.fromHospitalSearch ?? rbHospitalSearch,
         fromHospital,
       };
       try {
@@ -208,13 +264,42 @@ function RequestReferralInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRequestReferBack, hospitalParam]);
 
+  // Fetch groupCase / referout data for ใบส่งตัวเดิม panel (requestReferBack)
+  const referoutIdParam = searchParams.get("referout_id");
+  useEffect(() => {
+    if (!isRequestReferBack) return;
+    (async () => {
+      try {
+        // Priority 1: groupCase → fetch via findGroupCase
+        if (groupCaseParam) {
+          const res = await findGroupCase(groupCaseParam);
+          if (res?.referralDocuments) {
+            const doc = Array.isArray(res.referralDocuments) ? res.referralDocuments[0] : res.referralDocuments;
+            setReferGroupCase(doc);
+          }
+          return;
+        }
+        // Priority 2: referout_id → fetch via findOneReferral
+        if (referoutIdParam) {
+          const res = await findOneReferral(referoutIdParam);
+          if (res?.referralDocument) {
+            setReferGroupCase(res.referralDocument);
+          }
+        }
+      } catch (err) {
+        console.error("fetchGroupCase error:", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupCaseParam, referoutIdParam, isRequestReferBack]);
+
   // Debounced search handlers for referBack step 1
   const handleRbSearch = (val: string) => {
     setRbSearch(val);
     if (rbDebounceRef.current) clearTimeout(rbDebounceRef.current);
     rbDebounceRef.current = setTimeout(() => {
       setReferBackPage(1);
-      fetchReferBackList({ page: 1, search: val });
+      fetchReferBackList({ page: 1, patientSearch: val });
     }, 500);
   };
   const handleRbRunNumberSearch = (val: string) => {
@@ -230,7 +315,7 @@ function RequestReferralInner() {
     if (rbDebounceRef.current) clearTimeout(rbDebounceRef.current);
     rbDebounceRef.current = setTimeout(() => {
       setReferBackPage(1);
-      fetchReferBackList({ page: 1, toHospitalSearch: val });
+      fetchReferBackList({ page: 1, fromHospitalSearch: val });
     }, 500);
   };
   const handleRbClearFilters = () => {
@@ -240,9 +325,9 @@ function RequestReferralInner() {
     setReferBackPage(1);
     fetchReferBackList({
       page: 1,
-      search: "",
+      patientSearch: "",
       runNumberSearch: "",
-      toHospitalSearch: "",
+      fromHospitalSearch: "",
     });
   };
   const handleRbPageChange = (newPage: number) => {
@@ -268,22 +353,28 @@ function RequestReferralInner() {
         isActive: true,
       });
       const list: any[] = Array.isArray(apiResponse) ? apiResponse : [];
+
+      // Build base params (shared across all branches)
       const baseParams: Record<string, string> = {
         kind: "requestReferBack",
         hospital: item.toHospital?.name || "",
         hospitalID: String(item.toHospital?.id || ""),
         deliveryPoint: "true",
-        docter_branch: "true",
       };
       if (item.groupCase?.id) baseParams.groupCase = String(item.groupCase.id);
       if (item.id) baseParams.referout_id = String(item.id);
-      if (list.length === 1) {
+
+      if (list.length === 0) {
+        // ไม่มีจุดรับปลายทาง → ไปเลือกแผนก/สาขาทันที (no referPoint)
+        baseParams.docter_branch = "true";
+      } else if (list.length === 1) {
+        // มีจุดรับปลายทาง 1 จุด → set referPoint + ไปเลือกแผนก/สาขา
         baseParams.referPoint = String(list[0].id);
-      } else if (list.length > 1) {
-        // multiple: go to refer point selection (no docter_branch)
-        delete baseParams.docter_branch;
-        baseParams.referPoint = String(list[0].id);
+        baseParams.docter_branch = "true";
+      } else {
+        // มีจุดรับปลายทางหลายจุด → ไปหน้าเลือกจุดรับ (no docter_branch, no referPoint)
       }
+
       const q = new URLSearchParams(baseParams);
       router.push(`/create/request?${q.toString()}`);
     } catch (err) {
@@ -579,15 +670,46 @@ function RequestReferralInner() {
     }
   };
 
-  const handleSelectHospital = (hospital: HospitalOption) => {
-    router.push(`/create/request?${buildQuery({
-      hospital: hospital.name,
-      hospitalID: String(hospital.id),
-    })}`);
+  const handleSelectHospital = async (hospital: HospitalOption) => {
+    try {
+      setShowLoadingOverlay(true);
+      const ownHospitalId = (profile as any)?.permissionGroup?.hospital?.id;
+      const hospitalForParam = optionHospital || ownHospitalId || null;
+      const apiResponse = await checkReferPointHospital({
+        hospital: hospitalForParam ? Number(hospitalForParam) : undefined,
+        useFor: "จุดรับใบส่งตัว",
+        isOpd: true,
+        isActive: true,
+      });
+      const list: any[] = Array.isArray(apiResponse) ? apiResponse : [];
+
+      const baseParams: Record<string, string> = {
+        hospital: hospital.name,
+        hospitalID: String(hospital.id),
+        deliveryPoint: "true",
+      };
+
+      if (list.length === 0) {
+        // ไม่มีจุดรับปลายทาง → ไปเลือกแผนก/สาขาทันที
+        baseParams.docter_branch = "true";
+      } else if (list.length === 1) {
+        // มี 1 จุดรับ → set referPoint + ไปเลือกแผนก/สาขา
+        baseParams.referPoint = String(list[0].id);
+        baseParams.docter_branch = "true";
+      } else {
+        // มีหลายจุดรับ → ไปหน้าเลือกจุดรับ (no docter_branch)
+      }
+
+      router.push(`/create/request?${buildQuery(baseParams)}`);
+    } catch (err) {
+      console.error("handleSelectHospital error:", err);
+    } finally {
+      setShowLoadingOverlay(false);
+    }
   };
 
   const handleDeliveryPointNext = (id: number, name: string, phone?: string) => {
-    router.push(`/create/request?${buildQuery({
+    const params: Record<string, string> = {
       hospital: hospitalParam!,
       hospitalID: hospitalIDParam || "",
       deliveryPoint: "true",
@@ -595,7 +717,13 @@ function RequestReferralInner() {
       referPoint: String(id),
       referPointName: name,
       referPointPhone: phone || "",
-    })}`);
+    };
+    // Carry forward groupCase and referout_id (Nuxt toDocterBranch logic)
+    const groupCaseParam = searchParams.get("groupCase");
+    const referoutIdParam = searchParams.get("referout_id");
+    if (groupCaseParam) params.groupCase = groupCaseParam;
+    if (referoutIdParam) params.referout_id = referoutIdParam;
+    router.push(`/create/request?${buildQuery(params)}`);
   };
 
   const handleDoctorBranchNext = (branches: DoctorBranchOption[]) => {
@@ -608,7 +736,7 @@ function RequestReferralInner() {
       appointment: b.appointment ?? 1,
       remark: b.remark || "",
     }));
-    router.push(`/create/request?${buildQuery({
+    const branchParams: Record<string, string> = {
       hospital: hospitalParam!,
       hospitalID: hospitalIDParam || "",
       deliveryPoint: "true",
@@ -618,7 +746,13 @@ function RequestReferralInner() {
       referPointName: referPointNameParam || "",
       referPointPhone: referPointPhoneParam || "",
       branchData: JSON.stringify(branchData),
-    })}`);
+    };
+    // Carry forward groupCase and referout_id
+    const gcParam = searchParams.get("groupCase");
+    const roIdParam = searchParams.get("referout_id");
+    if (gcParam) branchParams.groupCase = gcParam;
+    if (roIdParam) branchParams.referout_id = roIdParam;
+    router.push(`/create/request?${buildQuery(branchParams)}`);
 
     // Toast matching Nuxt: "สำเร็จ - เลือกสาขา X สาขาแล้ว"
     const msg = branches.length === 0
@@ -899,8 +1033,8 @@ function RequestReferralInner() {
   const breadcrumbItems = useMemo(() => {
     // Determine current step index (0..4)
     let currentIdx = 1; // default: "เลือกสถานพยาบาลต้นทาง"
-    if (hospitalParam && !deliveryPointParam) currentIdx = 2;
-    else if (deliveryPointParam && doctorBranchParam && !branchNamesParam) currentIdx = 3;
+    if (hospitalParam && deliveryPointParam && !doctorBranchParam) currentIdx = 2;
+    else if (hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam) currentIdx = 3;
     else if (branchNamesParam) currentIdx = 4;
 
     // Paths for visited steps (clickable)
@@ -1381,12 +1515,12 @@ function RequestReferralInner() {
             </Box>
             <Box>
               <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
-                ค้นหาสถานพยาบาลปลายทาง
+                ค้นหาสถานพยาบาลต้นทาง
               </Typography>
               <TextField
                 size="small"
                 fullWidth
-                placeholder="ค้นหาสถานพยาบาลปลายทาง"
+                placeholder="ค้นหาสถานพยาบาลต้นทาง"
                 value={rbHospitalSearch}
                 onChange={(e) => handleRbHospitalSearch(e.target.value)}
                 InputProps={{
@@ -1436,25 +1570,8 @@ function RequestReferralInner() {
                   const fname = item?.data?.patient?.patient_firstname || "";
                   const lname = item?.data?.patient?.patient_lastname || "";
                   const fullName = `${fname} ${lname}`.trim() || "-";
-                  const createdAt = item?.createdAt ? new Date(item.createdAt) : null;
-                  const dateStr = createdAt
-                    ? `${String(createdAt.getDate()).padStart(2, "0")}/${String(
-                        createdAt.getMonth() + 1
-                      ).padStart(2, "0")}/${createdAt.getFullYear() + 543} ${String(
-                        createdAt.getHours()
-                      ).padStart(2, "0")}:${String(createdAt.getMinutes()).padStart(2, "0")}`
-                    : "-";
-                  const elapsed = (() => {
-                    if (!item?.createdAt || !item?.updatedAt) return "-";
-                    const a = new Date(item.createdAt).getTime();
-                    const b = new Date(item.updatedAt).getTime();
-                    const diff = Math.max(0, b - a);
-                    const mins = Math.floor(diff / 60000);
-                    if (mins < 60) return `${mins} นาที`;
-                    const hrs = Math.floor(mins / 60);
-                    const rm = mins % 60;
-                    return `${hrs} ชม. ${rm} นาที`;
-                  })();
+                  const dateStr = formatThaiDateTimeIntl(item?.createdAt);
+                  const elapsed = getElapsedTime(item?.createdAt || "", item?.updatedAt || "", item?.referralStatus?.name || "");
                   return (
                     <TableRow
                       key={item.id ?? i}
@@ -1465,13 +1582,10 @@ function RequestReferralInner() {
                       }}
                     >
                       <TableCell align="center">
-                        {(referBackPage - 1) * referBackLimit + i + 1}
+                        {item?.runNumber || "-"}
                       </TableCell>
                       <TableCell align="center">
-                        <Typography variant="body2">{item?.runNumber || "-"}</Typography>
-                        <Typography variant="caption" sx={{ color: "#6b7280" }}>
-                          {dateStr}
-                        </Typography>
+                        <Typography variant="body2">{dateStr}</Typography>
                       </TableCell>
                       <TableCell align="center">
                         <Typography variant="body2">{fullName}</Typography>
@@ -1483,10 +1597,36 @@ function RequestReferralInner() {
                         <Typography variant="body2">{item?.subType?.name || "-"}</Typography>
                       </TableCell>
                       <TableCell align="center">
-                        <Typography variant="body2">{item?.referralStatus?.name || "-"}</Typography>
+                        {item?.referralStatus?.name ? (
+                          <Box component="span" sx={{
+                            display: "inline-block", px: 1.5, py: 0.5, borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600,
+                            ...(item.referralStatus.name === "รับเข้ารักษา"
+                              ? { bgcolor: "#dcfce7", color: "#16a34a" }
+                              : item.referralStatus.name === "รอตอบรับ"
+                                ? { bgcolor: "#FEFCE8", color: "#EAB308" }
+                                : item.referralStatus.name === "ยกเลิก"
+                                  ? { bgcolor: "#FEF2F2", color: "#EF4444" }
+                                  : item.referralStatus.name === "ฉบับร่าง"
+                                    ? { bgcolor: "#F3F4F6", color: "#6B7280" }
+                                    : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
+                          }}>
+                            {item.referralStatus.name}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2">-</Typography>
+                        )}
                       </TableCell>
                       <TableCell align="center">
-                        <Typography variant="body2">{elapsed}</Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            ...(item?.referralStatus?.name === "รอตอบรับ" && elapsed.includes("ที่แล้ว")
+                              ? { color: "#EF4444", display: "flex", alignItems: "center", gap: 0.5, justifyContent: "center" }
+                              : {}),
+                          }}
+                        >
+                          {elapsed}
+                        </Typography>
                       </TableCell>
                       <TableCell align="center">
                         <Button
@@ -1601,15 +1741,120 @@ function RequestReferralInner() {
         </Box>
       )}
 
-      {/* Step 2: Delivery Point */}
-      {hospitalParam && !deliveryPointParam && (
+      {/* Step 2: Refer Point selection (hasHospital && hasDeliveryPoint && !hasDocterBranch && !hasBranchNames) */}
+      {hospitalParam && deliveryPointParam && !doctorBranchParam && !branchNamesParam && (
         <DeliveryPointSelector hospitalId={hospitalIDParam || ""} kind={kind} onNext={handleDeliveryPointNext} onBack={() => router.push(`/create/request?kind=${kind}`)} />
       )}
 
-      {/* Step 3: Doctor Branch */}
+      {/* Step 3: Doctor Branch (hasHospital && hasDeliveryPoint && hasDocterBranch && !hasBranchNames) */}
       {hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam && (
         <DoctorBranchSelector hospitalId={hospitalIDParam || ""} hospitalName={hospitalParam} kind={kind} onNext={handleDoctorBranchNext}
           onBack={() => router.push(`/create/request?${buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "" })}`)} />
+      )}
+
+      {/* ใบส่งตัวเดิม panel (requestReferBack only, at form step, not draft) */}
+      {isFormStep && isRequestReferBack && referGroupCase && referInfo?.referralStatus?.name !== "ฉบับร่าง" && (
+        <Box sx={{ mt: 3, p: 3, bgcolor: "#fff", borderRadius: "12px", border: "1px solid #e5e7eb" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, color: "#111827", mb: 2 }}>
+            ใบส่งตัวเดิม
+          </Typography>
+          <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: "#fff", borderBottom: "1px solid #e5e7eb" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>No</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>วัน/เวลาที่ส่งตัว</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>เลขบัตรประชาชน</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>ชื่อผู้ป่วย</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>สถานพยาบาลต้นทาง</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>ระยะเวลารับรองสิทธิ์</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#111827" }}>สถานะใบส่งตัว</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell>{referGroupCase?.runNumber || "-"}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{(() => {
+                      if (!referGroupCase?.createdAt) return "-";
+                      const d = new Date(referGroupCase.createdAt);
+                      if (isNaN(d.getTime())) return "-";
+                      const day = String(d.getDate()).padStart(2, "0");
+                      const month = String(d.getMonth() + 1).padStart(2, "0");
+                      const year = d.getFullYear() + 543;
+                      return `${day}/${month}/${year}`;
+                    })()}</Typography>
+                    <Typography variant="caption" sx={{ color: "#6b7280", display: "flex", alignItems: "center", gap: 0.5 }}>
+                      ⏰ {(() => {
+                        if (!referGroupCase?.createdAt) return "-";
+                        const d = new Date(referGroupCase.createdAt);
+                        if (isNaN(d.getTime())) return "-";
+                        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                      })()}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ color: "#2563eb" }}>
+                    {referGroupCase?.data?.patient?.patient_pid || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {[referGroupCase?.data?.patient?.patient_firstname, referGroupCase?.data?.patient?.patient_lastname].filter(Boolean).join(" ") || "-"}
+                  </TableCell>
+                  <TableCell>{referGroupCase?.fromHospital?.name || "-"}</TableCell>
+                  <TableCell>
+                    {referGroupCase?.deliveryPeriod?.length > 0 ? (
+                      referGroupCase.deliveryPeriod.map((period: any, idx: number) => {
+                        const fmtDate = (iso: string) => {
+                          if (!iso) return "-";
+                          const [dateStr] = iso.split("T");
+                          const [y, m, d] = (dateStr || "").split("-").map(Number);
+                          return isNaN(y) ? "-" : `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y + 543}`;
+                        };
+                        const fmtTime = (iso: string) => {
+                          if (!iso) return "00:00:00";
+                          const parts = iso.split("T");
+                          if (parts[1]) {
+                            const t = parts[1].replace("Z", "").split("+")[0].split("-")[0];
+                            return t.length >= 5 ? (t.length === 5 ? t + ":00" : t.substring(0, 8)) : "00:00:00";
+                          }
+                          return "00:00:00";
+                        };
+                        return (
+                          <Box key={idx} sx={{ mb: idx < referGroupCase.deliveryPeriod.length - 1 ? 1 : 0, fontSize: "0.875rem", lineHeight: 1.4 }}>
+                            <span>เริ่มต้น : {fmtDate(period?.startDelivery)}-{fmtTime(period?.startDelivery)}</span><br />
+                            <span>หมดอายุ : {fmtDate(period?.endDelivery)}-{fmtTime(period?.endDelivery)}</span>
+                          </Box>
+                        );
+                      })
+                    ) : (
+                      <Box sx={{ fontSize: "0.875rem", lineHeight: 1.4 }}>
+                        <span>เริ่มต้น : -</span><br />
+                        <span>หมดอายุ : -</span>
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {referGroupCase?.referralStatus?.name ? (
+                      <Box component="span" sx={{
+                        display: "inline-block", px: 1.5, py: 0.5, borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600,
+                        ...(referGroupCase.referralStatus.name === "รับเข้ารักษา"
+                          ? { bgcolor: "#dcfce7", color: "#16a34a" }
+                          : referGroupCase.referralStatus.name === "รอตอบรับ"
+                            ? { bgcolor: "#FEFCE8", color: "#EAB308" }
+                            : referGroupCase.referralStatus.name === "ยกเลิก"
+                              ? { bgcolor: "#FEF2F2", color: "#EF4444" }
+                              : referGroupCase.referralStatus.name === "ฉบับร่าง"
+                                ? { bgcolor: "#F3F4F6", color: "#6B7280" }
+                                : { bgcolor: "#EFF6FF", color: "#3B82F6" }),
+                      }}>
+                        {referGroupCase.referralStatus.name}
+                      </Box>
+                    ) : "-"}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
       )}
 
       {/* Step 4: Request Form */}
