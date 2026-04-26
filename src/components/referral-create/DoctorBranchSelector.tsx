@@ -19,7 +19,7 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  Alert,
+  Snackbar,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -30,6 +30,7 @@ import {
 } from "@mui/icons-material";
 import { useReferralCreateStore, type DoctorBranchOption } from "@/stores/referralCreateStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useSearchParams } from "next/navigation";
 import ThaiDateInput, { formatThaiDate as sharedFormatThaiDate } from "@/components/shared/ThaiDateInput";
 
 interface DoctorBranchSelectorProps {
@@ -193,29 +194,48 @@ export default function DoctorBranchSelector({
   onBack,
 }: DoctorBranchSelectorProps) {
   const { doctorBranches, fetchDoctorBranchList } = useReferralCreateStore();
+  const { profile, optionHospital } = useAuthStore();
+  const searchParamsHook = useSearchParams();
   const [selected, setSelected] = useState<SelectedDept[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(30); // Show 30 items initially
+  const [visibleCount, setVisibleCount] = useState(1000); // Show 1000 items initially
   const [validationErrors, setValidationErrors] = useState<Record<number, { date?: boolean; time?: boolean }>>({});
   const [errorMsg, setErrorMsg] = useState("");
   const [branchesFetched, setBranchesFetched] = useState(false);
 
   useEffect(() => {
-    // Match Nuxt: use hospitalID from URL (route.query.hospitalID) directly
+    // Guard: Nuxt checks route.query.hospitalID exists before calling API
+    const urlHospitalID = searchParamsHook.get("hospitalID");
+    if (!urlHospitalID) return;
+
+    // Match Nuxt getDocterBranch: param.hospital logic
+    // - referBack: always use URL hospitalID (fromHospital that sent the original referral)
+    // - other kinds: superAdmin uses optionHospital, others use profile hospital
+    const kindParam = searchParamsHook.get("kind");
+    const roleName = profile?.permissionGroup?.role?.name;
     const params: any = {
-      offset: 1,
-      limit: 0, // Nuxt uses limit=0 to get ALL branches
-      isOpd: true,
+      isOpd: "true",
       isActive: true,
     };
-    if (hospitalId) params.hospital = String(hospitalId);
+
+    if (kindParam === "referBack") {
+      // referBack: use URL hospitalID (matches Nuxt getDocterBranch using route.query.hospitalID)
+      params.hospital = Number(urlHospitalID);
+    } else if (roleName === "superAdmin") {
+      if (optionHospital !== undefined && optionHospital !== null) {
+        params.hospital = Number(optionHospital);
+      }
+    } else {
+      const profileHospitalId = profile?.permissionGroup?.hospital?.id;
+      params.hospital = profileHospitalId ? Number(profileHospitalId) : null;
+    }
 
     setBranchesFetched(false);
     fetchDoctorBranchList(params).then(() => {
       setBranchesFetched(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hospitalId, kind]);
+  }, [hospitalId, kind, profile, optionHospital]);
 
   // Auto-skip: match Nuxt watcher on docterBranchData
   // 0 branches → proceed with "ไม่ระบุสาขา"
@@ -257,7 +277,7 @@ export default function DoctorBranchSelector({
 
   // Reset visible count when search changes
   useEffect(() => {
-    setVisibleCount(30);
+    setVisibleCount(1000);
   }, [searchQuery]);
 
   // Count how many times each branch is selected
@@ -305,6 +325,37 @@ export default function DoctorBranchSelector({
     if (selected.length === 0) {
       setErrorMsg("ต้องเลือกข้อมูล\nกรุณาเลือกแผนกอย่างน้อย 1 รายการ");
       return;
+    }
+
+    // Match Nuxt validation: check continuous appointment rules
+    const continuousAppointments = selected.filter((dept) => dept.appointment === 2);
+
+    // Rule 1: Cannot select only 1 department with "รอนัดรักษาต่อเนื่อง"
+    if (selected.length === 1 && continuousAppointments.length === 1) {
+      setErrorMsg("ไม่สามารถเลือก\nเพียงแผนกเดียวได้\nกรุณาเพิ่มแผนกอื่น\nหรือระบุวัน/เวลาของการนัด\nคุณไม่สามารถเลือกแผนกเดียว\nที่ต้องการให้รอนัดรักษาต่อเนื่อง");
+      return;
+    }
+
+    // Rule 2: If >= 2 departments and none are continuous, at least 1 must have date+time
+    if (selected.length >= 2 && continuousAppointments.length === 0) {
+      const hasAtLeastOneDateTime = selected.some(
+        (dept) => dept.appointment === 1 && dept.appointmentDate && dept.appointmentTime
+      );
+      if (!hasAtLeastOneDateTime) {
+        setErrorMsg("เมื่อเลือกแผนกมากกว่า 2 แผนก\nการนัดหมายต้องมี\nการระบุวัน/เวลา\nอย่างน้อย 1 รายการ");
+        return;
+      }
+    }
+
+    // Rule 3: If >= 2 continuous appointments, at least 1 must have date+time
+    if (continuousAppointments.length >= 2) {
+      const hasAtLeastOneDateTime = selected.some(
+        (dept) => dept.appointment === 1 && dept.appointmentDate && dept.appointmentTime
+      );
+      if (!hasAtLeastOneDateTime) {
+        setErrorMsg("การนัดหมายต่อเนื่อง\nต้องมีการระบุวัน/เวลา\nอย่างน้อย 1 รายการ");
+        return;
+      }
     }
 
     // Validate: appointment type 1 requires date and time
@@ -506,7 +557,7 @@ export default function DoctorBranchSelector({
         <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
           <Button
             variant="outlined"
-            onClick={() => setVisibleCount((prev) => prev + 30)}
+            onClick={() => setVisibleCount((prev) => prev + 1000)}
             sx={{
               color: "#00AF75",
               borderColor: "#00AF75",
@@ -610,16 +661,43 @@ export default function DoctorBranchSelector({
           </Table>
         </TableContainer>
 
-      {/* Validation error message */}
-      {errorMsg && (
-        <Alert
-          severity="warning"
-          onClose={() => setErrorMsg("")}
-          sx={{ mt: 2, whiteSpace: "pre-line" }}
-        >
-          {errorMsg}
-        </Alert>
-      )}
+      {/* Validation error toast — Nuxt style: white bg, red left border, red icon */}
+      <Snackbar
+        open={!!errorMsg}
+        autoHideDuration={5000}
+        onClose={() => setErrorMsg("")}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Box sx={{
+          display: "flex", alignItems: "flex-start", gap: 1.5,
+          bgcolor: "#fff", borderRadius: "12px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+          borderLeft: "4px solid #ef4444", p: 2, minWidth: 280, maxWidth: 380,
+        }}>
+          {/* Red X icon */}
+          <Box sx={{
+            width: 28, height: 28, borderRadius: "50%", bgcolor: "#fef2f2",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, mt: 0.25,
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="#ef4444" strokeWidth="2" />
+              <path d="M8 8l8 8M16 8l-8 8" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.95rem", color: "#991b1b" }}>
+              ข้อมูลไม่ครบถ้วน
+            </Typography>
+            <Typography sx={{ fontSize: "0.85rem", color: "#374151", whiteSpace: "pre-line", mt: 0.5 }}>
+              {errorMsg}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setErrorMsg("")} sx={{ color: "#9ca3af", p: 0.25 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12M18 6l-12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </IconButton>
+        </Box>
+      </Snackbar>
 
       {/* Bottom bar: ยกเลิก (left), ยืนยัน (right) */}
       <Box

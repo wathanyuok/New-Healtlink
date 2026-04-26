@@ -461,9 +461,9 @@ export const useReferralCreateStore = create<ReferralCreateState>((set, get) => 
 
   /* ---- API: Doctor branch list (for OPD step) ---- */
   fetchDoctorBranchList: async (params) => {
-    // Match Nuxt: uses findAndCount with limit=0 to get ALL branches
-    // Params: isOpd, isActive, hospital (optional, based on role)
-    const res = await apiGet("main-service/doctor/branch/findAndCount", params);
+    // Match Nuxt: uses doctor/branch/find (NOT findAndCount)
+    // Nuxt params: { hospital, isOpd, isActive } — no offset/limit
+    const res = await apiGet("main-service/doctor/branch/find", params);
     const branches = (res?.doctorBranches || []).map((b: any) => ({
       value: b.id,
       name: b.name,

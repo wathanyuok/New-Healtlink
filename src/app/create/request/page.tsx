@@ -21,7 +21,7 @@ import {
   InputLabel,
   InputAdornment,
   Snackbar,
-  Alert,
+  IconButton,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -180,7 +180,7 @@ function RequestReferralInner() {
         const res = await findAndCountReferral(params);
         if (res) {
           setReferBackList(res.referralDocuments || []);
-          setReferBackTotal(res.totalCount ?? (res.referralDocuments || []).length);
+          setReferBackTotal((res.referralDocuments || []).length);
         }
       } catch (err) {
         console.error("fetchReferBackList error:", err);
@@ -619,6 +619,14 @@ function RequestReferralInner() {
       referPointPhone: referPointPhoneParam || "",
       branchData: JSON.stringify(branchData),
     })}`);
+
+    // Toast matching Nuxt: "สำเร็จ - เลือกสาขา X สาขาแล้ว"
+    const msg = branches.length === 0
+      ? "ดำเนินการต่อโดยไม่ระบุสาขา"
+      : `เลือกสาขา ${branches.length} สาขาแล้ว`;
+    setToastSeverity("success");
+    setToastMessage(msg);
+    setToastOpen(true);
   };
 
   const validateRequiredFields = useCallback(() => {
@@ -996,21 +1004,51 @@ function RequestReferralInner() {
       {/* ── Full-screen Loading Overlay (shared component) ── */}
       <LoadingOverlay open={showLoadingOverlay} />
 
-      {/* ── Success / Error Toast (matching Nuxt's toast) ── */}
+      {/* ── Success / Error Toast (matching Nuxt's toast style) ── */}
       <Snackbar
         open={toastOpen}
         autoHideDuration={3000}
         onClose={() => setToastOpen(false)}
         anchorOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        <Alert
-          onClose={() => setToastOpen(false)}
-          severity={toastSeverity}
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {toastMessage}
-        </Alert>
+        <Box sx={{
+          display: "flex", alignItems: "flex-start", gap: 1.5,
+          bgcolor: "#fff", borderRadius: "12px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+          borderLeft: toastSeverity === "success" ? "4px solid #22c55e" : "4px solid #ef4444",
+          p: 2, minWidth: 280, maxWidth: 380,
+        }}>
+          {/* Icon */}
+          <Box sx={{
+            width: 28, height: 28, borderRadius: "50%",
+            bgcolor: toastSeverity === "success" ? "#f0fdf4" : "#fef2f2",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, mt: 0.25,
+          }}>
+            {toastSeverity === "success" ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2" />
+                <path d="M8 12l3 3 5-5" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="#ef4444" strokeWidth="2" />
+                <path d="M8 8l8 8M16 8l-8 8" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.95rem", color: toastSeverity === "success" ? "#166534" : "#991b1b" }}>
+              {toastSeverity === "success" ? "สำเร็จ" : "ข้อมูลไม่ครบถ้วน"}
+            </Typography>
+            <Typography sx={{ fontSize: "0.85rem", color: "#374151", whiteSpace: "pre-line", mt: 0.5 }}>
+              {toastMessage}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setToastOpen(false)} sx={{ color: "#9ca3af", p: 0.25 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12M18 6l-12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </IconButton>
+        </Box>
       </Snackbar>
 
       {/* Header */}

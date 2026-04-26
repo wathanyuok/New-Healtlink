@@ -911,8 +911,8 @@ export default function RequestReferralForm({
   };
 
   const formatBranchDateTime = (branch: any) => {
+    if (branch.appointment === 2) return "รอนัดรักษาต่อเนื่อง";
     if (!branch.appointmentDate && !branch.appointmentTime) return "-";
-    if (branch.appointment === 2) return "ไม่ระบุวัน/เวลา";
     // appointmentDate is "YYYY-MM-DD", appointmentTime is "HH:MM"
     const dateParts = branch.appointmentDate ? branch.appointmentDate.split("-") : null;
     if (!dateParts || dateParts.length < 3) return branch.appointmentDate || "-";
@@ -984,8 +984,8 @@ export default function RequestReferralForm({
                 </Box>
               )}
 
-              {/* ระยะเวลารับรองสิทธิ์ — OPD only (not referBack) */}
-              {kind !== "referER" && kind !== "referIPD" && kind !== "referBack" && (
+              {/* ระยะเวลารับรองสิทธิ์ — only for referOut (not ER/IPD/referBack/request kinds) */}
+              {kind !== "referER" && kind !== "referIPD" && kind !== "referBack" && kind !== "requestReferOut" && kind !== "requestReferBack" && (
                 <Box
                   sx={{
                     mb: 3,
@@ -1297,7 +1297,11 @@ export default function RequestReferralForm({
                   >
                     จุดรับใบส่งตัว
                   </Typography>
-                  {(kind === "referER" || kind === "referIPD") ? (
+                  {(kind === "requestReferOut" || kind === "requestReferBack") ? (
+                    <Typography variant="body2" sx={{ ml: 2, color: "#EAB308" }}>
+                      รอยืนยันนัดหมาย
+                    </Typography>
+                  ) : (kind === "referER" || kind === "referIPD") ? (
                     <Typography
                       variant="body2"
                       sx={{ ml: 2, color: "#EAB308" }}
@@ -1314,50 +1318,58 @@ export default function RequestReferralForm({
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     จุดสร้างใบส่งตัว
-                    <Typography
-                      component="span"
-                      sx={{ color: "#ef4444", ml: 0.5 }}
-                    >
-                      *
-                    </Typography>
+                    {kind !== "requestReferOut" && kind !== "requestReferBack" && (
+                      <Typography
+                        component="span"
+                        sx={{ color: "#ef4444", ml: 0.5 }}
+                      >
+                        *
+                      </Typography>
+                    )}
                   </Typography>
-                  <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-                    <Select
-                      value={form.referralCreationPoint}
-                      displayEmpty
-                      onChange={(e) =>
-                        updateField("referralCreationPoint", e.target.value)
-                      }
-                      sx={selectSx}
-                      renderValue={(selected) => {
-                        if (!selected) return <span style={{ color: "#9ca3af" }}>เลือกจุดสร้าง ใบส่งตัว</span>;
-                        const opt = erReferPoints.find((o: any) => String(o.id) === String(selected));
-                        return opt?.name || selected;
-                      }}
-                      endAdornment={
-                        form.referralCreationPoint ? (
-                          <IconButton
-                            size="small"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              updateField("referralCreationPoint", "");
-                            }}
-                            sx={{ mr: 2, p: 0.25, color: "#9ca3af", "&:hover": { color: "#ef4444" } }}
-                          >
-                            <CloseIcon sx={{ fontSize: 18 }} />
-                          </IconButton>
-                        ) : null
-                      }
-                    >
-                      {erReferPoints.map((opt: any) => (
-                        <MenuItem key={opt.id} value={String(opt.id)}>
-                          {opt.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  {(kind === "requestReferOut" || kind === "requestReferBack") ? (
+                    <Typography variant="body2" sx={{ ml: 2, color: "#EAB308" }}>
+                      รอยืนยันนัดหมาย
+                    </Typography>
+                  ) : (
+                    <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                      <Select
+                        value={form.referralCreationPoint}
+                        displayEmpty
+                        onChange={(e) =>
+                          updateField("referralCreationPoint", e.target.value)
+                        }
+                        sx={selectSx}
+                        renderValue={(selected) => {
+                          if (!selected) return <span style={{ color: "#9ca3af" }}>เลือกจุดสร้าง ใบส่งตัว</span>;
+                          const opt = erReferPoints.find((o: any) => String(o.id) === String(selected));
+                          return opt?.name || selected;
+                        }}
+                        endAdornment={
+                          form.referralCreationPoint ? (
+                            <IconButton
+                              size="small"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                updateField("referralCreationPoint", "");
+                              }}
+                              sx={{ mr: 2, p: 0.25, color: "#9ca3af", "&:hover": { color: "#ef4444" } }}
+                            >
+                              <CloseIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          ) : null
+                        }
+                      >
+                        {erReferPoints.map((opt: any) => (
+                          <MenuItem key={opt.id} value={String(opt.id)}>
+                            {opt.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
                 </Box>
 
                 {/* Right sub-col */}
@@ -1387,12 +1399,16 @@ export default function RequestReferralForm({
                   >
                     เบอร์ติดต่อจุดใบส่งตัว
                   </Typography>
-                  {(kind === "referER" || kind === "referIPD") ? (
+                  {(kind === "requestReferOut" || kind === "requestReferBack") ? (
+                    <Typography variant="body2" sx={{ ml: 2, color: "#EAB308" }}>
+                      รอยืนยันนัดหมาย
+                    </Typography>
+                  ) : (kind === "referER" || kind === "referIPD") ? (
                     <Typography
                       variant="body2"
                       sx={{ ml: 2, color: "#EAB308" }}
                     >
-                      รอยืนยันนัดหมาย
+                      รอตอบรับ
                     </Typography>
                   ) : (
                     <Typography variant="body2" sx={{ ml: 2 }}>
@@ -1400,42 +1416,197 @@ export default function RequestReferralForm({
                     </Typography>
                   )}
 
-                  <Typography
-                    sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
-                  >
-                    เบอร์ติดต่อจุดสร้างใบส่งตัว
-                    <Typography
-                      component="span"
-                      sx={{ color: "#ef4444", ml: 0.5 }}
-                    >
-                      *
-                    </Typography>
-                  </Typography>
-                  {(() => {
-                    const selected = erReferPoints.find(
-                      (o: any) =>
-                        String(o.id) === String(form.referralCreationPoint)
-                    );
-                    if (selected && (selected.phone || selected.phone2)) {
-                      return (
-                        <Typography variant="body2" sx={{ ml: 2 }}>
-                          {`${selected.phone || 0} ต่อ ${
-                            selected.phone2 || 0
-                          }`}
+                  {kind !== "requestReferOut" && kind !== "requestReferBack" && (
+                    <>
+                      <Typography
+                        sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
+                      >
+                        เบอร์ติดต่อจุดสร้างใบส่งตัว
+                        <Typography
+                          component="span"
+                          sx={{ color: "#ef4444", ml: 0.5 }}
+                        >
+                          *
                         </Typography>
-                      );
-                    }
-                    return (
-                      <Typography variant="body2" sx={{ ml: 2 }}>
-                        -
                       </Typography>
-                    );
-                  })()}
+                      {(() => {
+                        const selected = erReferPoints.find(
+                          (o: any) =>
+                            String(o.id) === String(form.referralCreationPoint)
+                        );
+                        if (selected && (selected.phone || selected.phone2)) {
+                          return (
+                            <Typography variant="body2" sx={{ ml: 2 }}>
+                              {`${selected.phone || 0} ต่อ ${
+                                selected.phone2 || 0
+                              }`}
+                            </Typography>
+                          );
+                        }
+                        return (
+                          <Typography variant="body2" sx={{ ml: 2 }}>
+                            -
+                          </Typography>
+                        );
+                      })()}
+                    </>
+                  )}
                 </Box>
               </Box>
 
               {/* สาขา/แผนกปลายทาง */}
               {(kind === "referER" || kind === "referIPD") ? (
+                /* ER/IPD — show header + simple "รอตอบรับ" text (matching Nuxt IPD/ER) */
+                searchParams?.branch_names !== "false" && (
+                  <>
+                    <Box
+                      sx={{
+                        borderBottom: "2px solid #16a34a",
+                        mb: 2,
+                        pb: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: "#036245",
+                          fontSize: "1rem",
+                          fontWeight: 400,
+                          ml: 1,
+                        }}
+                      >
+                        สาขา/แผนกปลายทาง (
+                        <Typography
+                          component="span"
+                          sx={{
+                            color: "#036245",
+                            fontSize: "0.875rem",
+                            fontWeight: 400,
+                          }}
+                        >
+                          อนุญาติให้ส่งต่อสาขาอื่น
+                        </Typography>
+                        )
+                      </Typography>
+                      <Tooltip
+                        title="สามารถพิจารณาปรับเปลี่ยนสาขาที่ส่งต่อ จากที่ต้นทางกำหนดมาได้ถ้าต้นทางอนุญาต"
+                        placement="top"
+                        arrow
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              fontSize: "1rem",
+                              lineHeight: 1.6,
+                              padding: "14px 18px",
+                              maxWidth: 460,
+                              bgcolor: "rgba(0,0,0,0.88)",
+                              fontWeight: 500,
+                            },
+                          },
+                          arrow: { sx: { color: "rgba(0,0,0,0.88)" } },
+                        }}
+                      >
+                        <IconButton size="small" sx={{ color: "#9ca3af" }}>
+                          <HelpOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <Box sx={{ p: 3 }}>
+                      <Typography sx={{ color: "#64748B", fontSize: "1rem", fontWeight: 500, mb: 1 }}>
+                        สาขา/แผนกที่ส่งต่อ
+                      </Typography>
+                      <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>
+                        รอตอบรับ
+                      </Typography>
+                    </Box>
+                  </>
+                )
+              ) : (kind === "requestReferOut" || kind === "requestReferBack") ? (
+                <>
+                  <Box
+                    sx={{
+                      borderBottom: "2px solid #16a34a",
+                      mb: 2,
+                      pb: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: "#036245",
+                        fontSize: "1rem",
+                        fontWeight: 400,
+                        ml: 1,
+                      }}
+                    >
+                      สาขา/แผนกปลายทาง
+                    </Typography>
+                    <Tooltip
+                      title="สามารถพิจารณาปรับเปลี่ยนสาขาที่ส่งต่อ จากที่ต้นทางกำหนดมาได้ถ้าต้นทางอนุญาต"
+                      placement="top"
+                      arrow
+                      componentsProps={{
+                        tooltip: {
+                          sx: {
+                            fontSize: "1rem",
+                            lineHeight: 1.6,
+                            padding: "14px 18px",
+                            maxWidth: 460,
+                            bgcolor: "rgba(0,0,0,0.88)",
+                            fontWeight: 500,
+                          },
+                        },
+                        arrow: { sx: { color: "rgba(0,0,0,0.88)" } },
+                      }}
+                    >
+                      <IconButton size="small" sx={{ color: "#9ca3af" }}>
+                        <HelpOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  {/* Branch table matching Nuxt layout — green text header on white bg */}
+                  <TableContainer sx={{ mb: 3, border: "1px solid #e5e7eb", borderRadius: 1 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ borderBottom: "2px solid #16a34a" }}>
+                          <TableCell sx={{ color: "#036245", fontWeight: 600, width: 60 }}>ลำดับ</TableCell>
+                          <TableCell sx={{ color: "#036245", fontWeight: 600 }}>สาขา/แผนกที่ส่งต่อ</TableCell>
+                          <TableCell sx={{ color: "#036245", fontWeight: 600 }}>วัน/เวลานัดหมาย</TableCell>
+                          <TableCell sx={{ color: "#036245", fontWeight: 600 }}>หมายเหตุ</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {branchList.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} sx={{ textAlign: "center", color: "#9ca3af" }}>ไม่มีข้อมูล</TableCell>
+                          </TableRow>
+                        ) : branchList.map((branch: any) => (
+                          <TableRow key={branch.index} sx={{ bgcolor: "#fefce8" }}>
+                            <TableCell sx={{ textAlign: "center" }}>{branch.index}</TableCell>
+                            <TableCell>{branch.name || "-"}</TableCell>
+                            <TableCell>
+                              {branch.appointment === 2
+                                ? "รอนัดรักษาต่อเนื่อง"
+                                : branch.appointmentDate
+                                  ? `${(() => {
+                                      const [y, m, d] = branch.appointmentDate.split("-").map(Number);
+                                      return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y + 543}`;
+                                    })()} - ${branch.appointmentTime || "00:00"} น.`
+                                  : "-"}
+                            </TableCell>
+                            <TableCell>{branch.remark || "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
+              ) : (
+                /* referOut / referBack — header with (อนุญาติให้ส่งต่อสาขาอื่น) + table */
                 searchParams?.branch_names !== "false" && (
                   <>
                     <Box
@@ -1502,22 +1673,22 @@ export default function RequestReferralForm({
                     >
                       <Table size="small">
                         <TableHead>
-                          <TableRow sx={{ bgcolor: "#f9fafb" }}>
-                            <TableCell sx={{ fontWeight: 600, textAlign: "center", width: 60 }}>
+                          <TableRow sx={{ bgcolor: "#036245" }}>
+                            <TableCell sx={{ color: "#fff", fontWeight: 600, textAlign: "center", width: 60 }}>
                               ลำดับ
                             </TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>
+                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>
                               สาขา/แผนกที่ส่งต่อ
                             </TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>
+                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>
                               วัน/เวลานัดหมาย
                             </TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>หมายเหตุ</TableCell>
+                            <TableCell sx={{ color: "#fff", fontWeight: 600 }}>หมายเหตุ</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {branchList.map((branch) => (
-                            <TableRow key={branch.index}>
+                          {branchList.map((branch: any) => (
+                            <TableRow key={branch.index} sx={{ bgcolor: branch.index % 2 === 0 ? "#fefce8" : "#fff" }}>
                               <TableCell align="center">{branch.index}</TableCell>
                               <TableCell>{branch.name}</TableCell>
                               <TableCell>{formatBranchDateTime(branch)}</TableCell>
@@ -1538,88 +1709,6 @@ export default function RequestReferralForm({
                     </TableContainer>
                   </>
                 )
-              ) : (
-                <>
-                  <Box
-                    sx={{
-                      borderBottom: "2px solid #16a34a",
-                      mb: 2,
-                      pb: 1,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: "#036245",
-                        fontSize: "1rem",
-                        fontWeight: 400,
-                        ml: 1,
-                      }}
-                    >
-                      สาขา/แผนกปลายทาง (
-                      <Typography
-                        component="span"
-                        sx={{
-                          color: "#036245",
-                          fontSize: "0.875rem",
-                          fontWeight: 400,
-                        }}
-                      >
-                        อนุญาติให้ส่งต่อสาขาอื่น
-                      </Typography>
-                      )
-                    </Typography>
-                    <Tooltip
-                      title="สามารถพิจารณาปรับเปลี่ยนสาขาที่ส่งต่อ จากที่ต้นทางกำหนดมาได้ถ้าต้นทางอนุญาต"
-                      placement="top"
-                      arrow
-                      componentsProps={{
-                        tooltip: {
-                          sx: {
-                            fontSize: "1rem",
-                            lineHeight: 1.6,
-                            padding: "14px 18px",
-                            maxWidth: 460,
-                            bgcolor: "rgba(0,0,0,0.88)",
-                            fontWeight: 500,
-                          },
-                        },
-                        arrow: { sx: { color: "rgba(0,0,0,0.88)" } },
-                      }}
-                    >
-                      <IconButton size="small" sx={{ color: "#9ca3af" }}>
-                        <HelpOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                  <Box sx={{ p: 2, mb: 3 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: "#64748B",
-                        fontWeight: 500,
-                        fontSize: "0.95rem",
-                        mb: 1,
-                      }}
-                    >
-                      สาขา/แผนกที่ส่งต่อ
-                    </Typography>
-                    <Box component="ol" sx={{ ml: 4, pl: 0, listStyleType: "decimal" }}>
-                      {branchList.map((branch) => (
-                        <Typography component="li" key={branch.index} variant="body2" sx={{ mb: 0.5 }}>
-                          {branch.name || "-"}
-                        </Typography>
-                      ))}
-                      {branchList.length === 0 && (
-                        <Typography variant="body2" color="textSecondary">
-                          ไม่มีข้อมูล
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                </>
               )}
 
               {/* ข้อมูลผู้สร้างใบส่งตัว */}

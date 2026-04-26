@@ -174,25 +174,37 @@ export default function ThaiDateInput({
 
   const borderColor = error ? "#ef4444" : "#d1d5db";
 
-  // Dropdown position for portal
+  // Dropdown position for portal — prefer above (like Nuxt)
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const updateDropdownPos = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+      // Use actual dropdown height if available, otherwise estimate
+      const actualHeight = dropdownRef.current?.offsetHeight || 420;
+      const spaceAbove = rect.top;
+      if (spaceAbove >= actualHeight + 8) {
+        // Position above the input
+        setDropdownPos({ top: rect.top - actualHeight - 8, left: rect.left });
+      } else {
+        // Fallback: position below
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!open) return;
     updateDropdownPos();
+    // Re-calculate after a frame so dropdownRef has its real height
+    const raf = requestAnimationFrame(() => updateDropdownPos());
     window.addEventListener("scroll", updateDropdownPos, true);
     window.addEventListener("resize", updateDropdownPos);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", updateDropdownPos, true);
       window.removeEventListener("resize", updateDropdownPos);
     };
-  }, [open, updateDropdownPos]);
+  }, [open, viewMode, updateDropdownPos]);
 
   // --- View mode handlers ---
   const openMonthPicker = () => {
