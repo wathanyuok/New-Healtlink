@@ -4,82 +4,28 @@ import React, { Suspense, useEffect, useState, useRef, useCallback } from "react
 import { useSearchParams } from "next/navigation";
 import { useReferralStore } from "@/stores/referralStore";
 import { useAuthStore } from "@/stores/authStore";
-
-/* ── helpers — matches Nuxt formatStartDateThai / formatEndTime (string parsing, no timezone issues) ── */
-function fmtDateThai(d: any): string {
-  if (!d || typeof d !== "string") return "-";
-  try {
-    // Extract date part from ISO string "2026-04-19T00:00:00.000Z" → "2026-04-19"
-    const dateStr = d.includes("T") ? d.split("T")[0] : d;
-    if (!dateStr) return "-";
-    const [year, month, day] = dateStr.split("-").map(Number);
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return "-";
-    if (month < 1 || month > 12 || day < 1 || day > 31) return "-";
-    const buddhistYear = year + 543;
-    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${buddhistYear}`;
-  } catch { return "-"; }
-}
-/** Format ISO → "dd/mm/yyyy - HH:MM น." (strip timezone, local time — matches Nuxt formatThaiDateTimeLocal) */
-function fmtDateTimeThai(d: any): string {
-  if (!d || typeof d !== "string") return "-";
-  try {
-    const local = d.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
-    const date = new Date(local);
-    if (isNaN(date.getTime())) return "-";
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = date.getFullYear() + 543;
-    const hh = String(date.getHours()).padStart(2, "0");
-    const min = String(date.getMinutes()).padStart(2, "0");
-    return `${dd}/${mm}/${yyyy} - ${hh}:${min} น.`;
-  } catch { return "-"; }
-}
-function fmtTimeThai(d: any): string {
-  if (!d || typeof d !== "string") return "-";
-  try {
-    // Extract time from ISO string "2026-04-19T17:30:00.000Z" → "17:30:00"
-    if (d.includes("T")) {
-      const timePart = d.split("T")[1];
-      if (timePart) {
-        const clean = timePart.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
-        // Match HH:MM:SS or HH:MM
-        const m = clean.match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
-        if (m) return `${m[1]}:${m[2]}:${m[3] || "00"}`;
-      }
-    }
-    // Plain time string "10:00:00"
-    if (/^\d{2}:\d{2}(:\d{2})?$/.test(d)) {
-      return d.split(":").length === 3 ? d : d + ":00";
-    }
-    return "-";
-  } catch { return "-"; }
-}
-function calcAge(birthday: string | undefined | null): string {
-  if (!birthday) return "-";
-  try {
-    const b = new Date(birthday);
-    if (isNaN(b.getTime())) return "-";
-    const now = new Date();
-    let age = now.getFullYear() - b.getFullYear();
-    if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
-    return `${Math.max(0, age)} ปี`;
-  } catch { return "-"; }
-}
+import {
+  fmtDateThai,
+  fmtDateTimeThai,
+  fmtTimeDirect,
+  fmtTimeBangkok,
+  calcAge,
+} from "@/utils/dateFormat";
 
 /* ── styles (inline for PDF capture) ── */
 const S = {
-  page: { width: "210mm", minHeight: "280mm", padding: "7mm", background: "#fff", margin: "8px auto", fontFamily: "Sarabun, sans-serif", fontSize: "10px", color: "#111827", lineHeight: 1.4 } as React.CSSProperties,
-  sectionTitle: { fontFamily: "Sarabun, sans-serif", fontSize: "10px", fontWeight: 400, lineHeight: "24px", color: "#00AF75", borderBottom: "1px solid #00AF75", marginBottom: "4px" } as React.CSSProperties,
+  page: { width: "210mm", minHeight: "280mm", padding: "7mm", background: "#fff", margin: "8px auto", fontFamily: "Sarabun, sans-serif", fontSize: "12px", color: "#111827", lineHeight: 1.4 } as React.CSSProperties,
+  sectionTitle: { fontFamily: "Sarabun, sans-serif", fontSize: "12px", fontWeight: 400, lineHeight: "24px", color: "#00AF75", borderBottom: "1px solid #00AF75", marginBottom: "4px", marginTop: "5px" } as React.CSSProperties,
   label: { color: "#6b7280", marginRight: "4px" } as React.CSSProperties,
   row: { display: "flex", flexWrap: "wrap" as const, lineHeight: 1.4 },
   half: { width: "50%", padding: "0" } as React.CSSProperties,
   third: { width: "33.33%" } as React.CSSProperties,
   sixth: { width: "16.66%" } as React.CSSProperties,
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" } as React.CSSProperties,
+  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" } as React.CSSProperties,
   grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" } as React.CSSProperties,
-  grid6: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "8px" } as React.CSSProperties,
-  separator: { borderTop: "1px solid #e5e7eb", marginTop: "4px" } as React.CSSProperties,
-  table: { width: "100%", fontSize: "10px", borderCollapse: "collapse" as const } as React.CSSProperties,
+  grid6: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "5px" } as React.CSSProperties,
+  separator: { borderTop: "1px solid #e5e7eb", marginTop: "5px", paddingTop: "2px" } as React.CSSProperties,
+  table: { width: "100%", fontSize: "12px", borderCollapse: "collapse" as const, marginTop: "3px" } as React.CSSProperties,
   th: { textAlign: "left" as const, fontWeight: 400, color: "#6b7280", padding: "2px 0" } as React.CSSProperties,
   td: { padding: "1px 0" } as React.CSSProperties,
   pageBreak: { pageBreakAfter: "always" as const, breakAfter: "page" as const } as React.CSSProperties,
@@ -145,12 +91,12 @@ function PrintReferPageInner() {
 
     for (let i = 1; i <= pageCount; i++) {
       pdf.setPage(i);
-      // Left: "Print by: username"
+      // Left: "Print by: username"  — at very bottom of page (5mm from edge)
       if (footerName) {
-        pdf.text(`Print by: ${footerName}`, 10, pageHeight - 8, { align: "left" });
+        pdf.text(`Print by: ${footerName}`, 10, pageHeight - 5, { align: "left" });
       }
       // Right: "หน้า X / Y"
-      pdf.text(`หน้า ${i} / ${pageCount}`, pageWidth - 10, pageHeight - 8, { align: "right" });
+      pdf.text(`หน้า ${i} / ${pageCount}`, pageWidth - 10, pageHeight - 5, { align: "right" });
     }
   };
 
@@ -185,7 +131,7 @@ function PrintReferPageInner() {
       const fileName = `ใบส่งตัว_${data?.runNumber || data?.id || "referral"}.pdf`;
 
       const opt = {
-        margin: [0, 0, 0, 0],
+        margin: [0, 0, 8, 0],  // [top, left, bottom, right] — 8mm bottom reserved for footer
         filename: fileName,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, letterRendering: true },
@@ -294,19 +240,19 @@ function PrintReferPageInner() {
             {/* Left: hospital info */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <img src="/images/logo2.png" alt="Logo" style={{ width: "48px", height: "48px", objectFit: "contain" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              <div style={{ fontSize: "10px", lineHeight: 1.3 }}>
+              <div style={{ fontSize: "14px", lineHeight: 1.3 }}>
                 <div style={{ fontWeight: 600, marginBottom: "2px" }}>{headerHosp.name || "-"}</div>
                 {[headerHosp.address, headerHosp.subDistrict, headerHosp.district, headerHosp.province, headerHosp.postalCode].filter(Boolean).length > 0 && (
-                  <div style={{ fontSize: "9px" }}>{[headerHosp.address, headerHosp.subDistrict, headerHosp.district, headerHosp.province, headerHosp.postalCode].filter(Boolean).join(" ")}</div>
+                  <div style={{ fontSize: "12px" }}>{[headerHosp.address, headerHosp.subDistrict, headerHosp.district, headerHosp.province, headerHosp.postalCode].filter(Boolean).join(" ")}</div>
                 )}
-                <div style={{ fontSize: "9px" }}>โทรศัพท์ {headerHosp.phone || "-"}</div>
+                <div style={{ fontSize: "12px" }}>โทรศัพท์ {headerHosp.phone || "-"}</div>
               </div>
             </div>
             {/* Right: document info */}
-            <div style={{ textAlign: "right", fontSize: "10px", lineHeight: 1.3 }}>
+            <div style={{ textAlign: "right", fontSize: "14px", lineHeight: 1.3 }}>
               <div>เลขที่ใบส่งตัว : {data.runNumber || "-"}</div>
-              <div style={{ fontSize: "9px" }}>วันที่สร้างใบส่งตัว : {fmtDateThai(data.createdAt)}</div>
-              <div style={{ fontSize: "9px" }}>เวลาสร้างใบส่งตัว : {fmtTimeThai(data.createdAt)} น.</div>
+              <div style={{ fontSize: "12px" }}>วันที่สร้างใบส่งตัว : {fmtDateThai(data.createdAt)}</div>
+              <div style={{ fontSize: "12px" }}>เวลาสร้างใบส่งตัว : {fmtTimeDirect(data.createdAt)} น.</div>
             </div>
           </div>
           <div style={{ textAlign: "center", margin: "4px 0" }}>
@@ -364,9 +310,9 @@ function PrintReferPageInner() {
 
         {/* ══════ PATIENT INFO ══════ */}
         <div style={S.sectionTitle}>ข้อมูลผู้ป่วย</div>
-        <div style={{ display: "flex", gap: "8px", margin: "4px" }}>
+        <div style={{ display: "flex", gap: "8px", margin: "6px 4px" }}>
           <div style={{ width: "80px", height: "96px", border: "1px solid #d1d5db", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: "9px", color: "#6b7280", textAlign: "center" }}>ไม่มี<br />รูปภาพ</span>
+            <span style={{ fontSize: "10px", color: "#6b7280", textAlign: "center" }}>ไม่มี<br />รูปภาพ</span>
           </div>
           <div style={{ ...S.grid2, flex: 1 }}>
             <div>
@@ -494,7 +440,7 @@ function PrintReferPageInner() {
         {/* ══════ DOCTOR INFO + DELIVERY PERIOD ══════ */}
         <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
           {/* Left: Doctor info */}
-          <div style={{ flex: 1, fontSize: "10px", lineHeight: 1.4 }}>
+          <div style={{ flex: 1, fontSize: "12px", lineHeight: 1.4}}>
             <div style={S.sectionTitle}>ข้อมูลผู้สร้างใบส่งตัว</div>
             <div style={{ color: "#6b7280", marginTop: "2px" }}>เรียนมาเพื่อโปรดทราบและกรุณาดำเนินการตามความเหมาะสมต่อไป</div>
             <div style={{ marginTop: "8px" }}><span style={S.label}>เจ้าหน้าที่ผู้ส่ง:</span> {createdByUser}</div>
@@ -515,7 +461,7 @@ function PrintReferPageInner() {
           </div>
 
           {/* Right: Delivery period — matches Nuxt layout exactly */}
-          <div style={{ flex: 1, fontSize: "10px", lineHeight: 1.4 }}>
+          <div style={{ flex: 1, fontSize: "12px", lineHeight: 1.4}}>
             <div style={S.sectionTitle}>ระยะเวลารับรองสิทธิ์</div>
             {(() => {
               const dp = Array.isArray(data.deliveryPeriod) && data.deliveryPeriod.length > 0 ? data.deliveryPeriod[0] : null;
@@ -527,16 +473,16 @@ function PrintReferPageInner() {
                   </div>
                   <div style={{ display: "flex", gap: "2px", marginBottom: "2px" }}>
                     <div style={{ flex: 1 }}><span style={S.label}>วันที่เริ่มต้น</span><span>: {dp ? fmtDateThai(dp.startDelivery) : "-"}</span></div>
-                    <div style={{ flex: 1 }}><span style={S.label}>เวลาเริ่มต้น</span><span>: {dp ? fmtTimeThai(dp.startDelivery) + " น." : "-"}</span></div>
+                    <div style={{ flex: 1 }}><span style={S.label}>เวลาเริ่มต้น</span><span>: {dp ? fmtTimeDirect(dp.startDelivery) + " น." : "-"}</span></div>
                   </div>
                   <div style={{ display: "flex", gap: "2px" }}>
                     <div style={{ flex: 1 }}><span style={S.label}>วันที่สิ้นสุด</span><span>: {dp ? fmtDateThai(dp.endDelivery) : "-"}</span></div>
-                    <div style={{ flex: 1 }}><span style={S.label}>เวลาสิ้นสุด</span><span>: {dp ? (data.referralDeliveryPeriod?.name === "ใช้ได้ครั้งเดียว" ? "23:59 น." : fmtTimeThai(dp.endDelivery) + " น.") : "-"}</span></div>
+                    <div style={{ flex: 1 }}><span style={S.label}>เวลาสิ้นสุด</span><span>: {dp ? (data.referralDeliveryPeriod?.name === "ใช้ได้ครั้งเดียว" ? "23:59 น." : fmtTimeDirect(dp.endDelivery) + " น.") : "-"}</span></div>
                   </div>
                 </div>
               );
             })()}
-            <div style={{ marginTop: "2px", color: "#6b7280", fontSize: "10px" }}>
+            <div style={{ marginTop: "2px", color: "#6b7280", fontSize: "12px" }}>
               กรุณาใช้สิทธิ์การรักษาตามระยะเวลาดังกล่าว
             </div>
           </div>

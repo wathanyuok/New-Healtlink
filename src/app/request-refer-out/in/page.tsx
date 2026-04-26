@@ -44,10 +44,15 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import Image from "next/image";
 import { useReferralStore } from "@/stores/referralStore";
 import { useHospitalStore } from "@/stores/hospitalStore";
-
+import {
+  fmtDateThai as fmtDateThaiDirect,
+  fmtDateTimeThai as fmtThaiDateTimeLocal,
+  fmtTimeDirect,
+  formatBirthdayThai,
+} from "@/utils/dateFormat";
 
 /* ------------------------------------------------------------------ */
-/*  Helper: format date string to Thai Buddhist era                    */
+/*  Helper: format date+time with timezone conversion (for log dates)  */
 /* ------------------------------------------------------------------ */
 function fmtDate(d: any) {
   if (!d) return "-";
@@ -63,64 +68,6 @@ function fmtDate(d: any) {
   } catch {
     return String(d);
   }
-}
-
-function fmtDateOnly(d: any) {
-  if (!d) return "-";
-  try {
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return String(d);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = date.getFullYear() + 543;
-    return `${dd}/${mm}/${yyyy}`;
-  } catch {
-    return String(d);
-  }
-}
-
-/** Format ISO date string directly (no new Date()) to dd/mm/YYYY+543 */
-function fmtDateThaiDirect(d: any): string {
-  if (!d || typeof d !== "string") return "-";
-  try {
-    const datePart = d.includes("T") ? d.split("T")[0] : d;
-    const [year, month, day] = datePart.split("-").map(Number);
-    if (!year || !month || !day) return "-";
-    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year + 543}`;
-  } catch { return "-"; }
-}
-
-/**
- * Format ISO date to Thai Buddhist era datetime "dd/mm/yyyy - HH:MM น."
- * Mirrors Nuxt formatThaiDateTimeLocal — strips timezone, treats as local.
- */
-function fmtThaiDateTimeLocal(isoString: any): string {
-  if (!isoString || typeof isoString !== "string") return "-";
-  try {
-    const localTimeString = isoString.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
-    const date = new Date(localTimeString);
-    if (isNaN(date.getTime())) return "-";
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = date.getFullYear() + 543;
-    const hh = String(date.getHours()).padStart(2, "0");
-    const min = String(date.getMinutes()).padStart(2, "0");
-    return `${dd}/${mm}/${yyyy} - ${hh}:${min} น.`;
-  } catch { return "-"; }
-}
-
-/** Extract time from ISO string directly (no timezone conversion) */
-function fmtTimeDirect(d: any): string {
-  if (!d || typeof d !== "string") return "-";
-  try {
-    if (!d.includes("T")) return "-";
-    const timePart = d.split("T")[1];
-    if (!timePart) return "-";
-    const timeOnly = timePart.replace(/\.\d{3}Z?$/, "").replace(/[+-]\d{2}:\d{2}$/, "");
-    if (/^\d{2}:\d{2}:\d{2}$/.test(timeOnly)) return timeOnly;
-    if (/^\d{2}:\d{2}$/.test(timeOnly)) return `${timeOnly}:00`;
-    return "-";
-  } catch { return "-"; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,28 +143,7 @@ function InfoField({ label, value, bold }: { label: string; value: any; bold?: b
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helper: format birthday to Thai Buddhist era (dd/mm/yyyy)          */
-/* ------------------------------------------------------------------ */
-function formatBirthdayThai(birthday: string | undefined | null): string {
-  if (!birthday || typeof birthday !== "string") return "-";
-  try {
-    let year: number, month: number, day: number;
-    if (birthday.includes("T")) {
-      const [dateStr] = birthday.split("T");
-      [year, month, day] = dateStr.split("-").map(Number);
-    } else if (birthday.includes("-")) {
-      [year, month, day] = birthday.split("-").map(Number);
-    } else {
-      return birthday; // already formatted or unknown format
-    }
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return birthday;
-    const buddhistYear = year + 543;
-    return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${buddhistYear}`;
-  } catch {
-    return birthday;
-  }
-}
+
 
 /* ------------------------------------------------------------------ */
 /*  Helper: calculate age from birthday string                         */
@@ -1180,10 +1106,9 @@ function RequestReferOutDetailPageInner() {
     .filter((h: any) => h.name);
 
   // Check if print button should show
+  // Show for any group case document as long as status is not "รอตอบรับ"
   const shouldShowPrint = statusName &&
-    statusName !== "รอตอบรับ" &&
-    sortedGroupDocs.length > 0 &&
-    doc.id === sortedGroupDocs[0]?.id;
+    statusName !== "รอตอบรับ";
 
   const lifeStatus = doc.referralLifeStatus || "มีชีวิต";
   const lifeStatusLogs: LifeStatusLog[] = doc.referralLifeStatusLogs || [];
