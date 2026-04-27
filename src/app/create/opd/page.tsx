@@ -683,7 +683,7 @@ function OPDReferralInner() {
   };
 
   // Doctor branch next — matches Nuxt: preserves all existing URL params + adds branch_names/branch_ids
-  const handleDoctorBranchNext = (branches: DoctorBranchOption[]) => {
+  const handleDoctorBranchNext = (branches: DoctorBranchOption[], isChangeDoctorBranch?: boolean) => {
     const branchNames = branches.map((b) => b.name).join(",");
     const branchIds = branches.map((b) => String(b.value || "")).join(",");
     // Preserve all existing search params (kind, groupCase, referPoint, hospital, etc.)
@@ -694,6 +694,10 @@ function OPDReferralInner() {
       branch_names: branchNames || "ไม่ระบุสาขา",
     };
     if (branchIds) q.branch_ids = branchIds;
+    // Match Nuxt: include isChangeDoctorBranch in URL when toggle is ON
+    if (isChangeDoctorBranch) {
+      q.isChangeDoctorBranch = "true";
+    }
     router.push(`/create/opd?${buildQuery(q)}`);
   };
 
@@ -908,6 +912,11 @@ function OPDReferralInner() {
 
           // Equipment
           equipment: getEquipment(formData.requiredEquipment?.map((e: any) => e.name)),
+
+          // Match Nuxt: isChangeDoctorBranch from URL param (set by referBack branch selector toggle)
+          isChangeDoctorBranch: searchParams.get("isChangeDoctorBranch")
+            ? Boolean(searchParams.get("isChangeDoctorBranch"))
+            : false,
 
           // Patient identifiers
           HN: formData.patient_hn || undefined,

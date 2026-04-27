@@ -350,7 +350,10 @@ export default function DoctorBranchSelector({
     if (isReferBack) {
       const selectedBranches = doctorBranches.filter((b) => selectedBranchIds.has(b.value));
       // Allow proceeding with 0 selections (skip) — matches Nuxt "ยืนยันหรือข้าม"
-      onNext(selectedBranches, !isChangeDoctorBranchDisallowed);
+      // Match Nuxt: toggleState = active.value (the toggle itself)
+      // When toggle ON ("ไม่อนุญาต" active) → isChangeDoctorBranch = true in URL
+      // When toggle OFF (default) → isChangeDoctorBranch = false (omitted from URL)
+      onNext(selectedBranches, isChangeDoctorBranchDisallowed);
       return;
     }
 
