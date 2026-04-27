@@ -37,7 +37,9 @@ interface DoctorBranchSelectorProps {
   hospitalId: string | number;
   hospitalName?: string;
   kind?: string;
-  onNext: (branches: DoctorBranchOption[]) => void;
+  /** referBack mode: simple checkbox selection, no appointment table */
+  isReferBack?: boolean;
+  onNext: (branches: DoctorBranchOption[], isChangeDoctorBranch?: boolean) => void;
   onBack: () => void;
 }
 
@@ -190,6 +192,7 @@ export default function DoctorBranchSelector({
   hospitalId,
   hospitalName,
   kind,
+  isReferBack = false,
   onNext,
   onBack,
 }: DoctorBranchSelectorProps) {
@@ -202,6 +205,10 @@ export default function DoctorBranchSelector({
   const [validationErrors, setValidationErrors] = useState<Record<number, { date?: boolean; time?: boolean }>>({});
   const [errorMsg, setErrorMsg] = useState("");
   const [branchesFetched, setBranchesFetched] = useState(false);
+  // referBack mode: toggle for "ไม่อนุญาตให้ปลายทางส่งไปสาขา/แผนกอื่น"
+  const [isChangeDoctorBranchDisallowed, setIsChangeDoctorBranchDisallowed] = useState(false);
+  // referBack mode: set of selected branch IDs (checkbox toggle)
+  const [selectedBranchIds, setSelectedBranchIds] = useState<Set<number | string>>(new Set());
 
   useEffect(() => {
     // Guard: Nuxt checks route.query.hospitalID exists before calling API
@@ -320,7 +327,33 @@ export default function DoctorBranchSelector({
     );
   };
 
+  // referBack mode: toggle branch selection
+  const handleToggleBranch = (branch: DoctorBranchOption) => {
+    setSelectedBranchIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(branch.value)) {
+        next.delete(branch.value);
+      } else {
+        next.add(branch.value);
+      }
+      return next;
+    });
+  };
+
+  // referBack mode: clear selection
+  const handleClearReferBackSelection = () => {
+    setSelectedBranchIds(new Set());
+  };
+
   const handleProceed = () => {
+    // referBack mode: simple selection, no appointment validation
+    if (isReferBack) {
+      const selectedBranches = doctorBranches.filter((b) => selectedBranchIds.has(b.value));
+      // Allow proceeding with 0 selections (skip) — matches Nuxt "ยืนยันหรือข้าม"
+      onNext(selectedBranches, !isChangeDoctorBranchDisallowed);
+      return;
+    }
+
     // Validate: must select at least 1 department
     if (selected.length === 0) {
       setErrorMsg("ต้องเลือกข้อมูล\nกรุณาเลือกแผนกอย่างน้อย 1 รายการ");
@@ -411,11 +444,11 @@ export default function DoctorBranchSelector({
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Typography sx={{ color: "#6b7280" }}>
-            {`เลือกแล้ว (${selected.length})`}
+            {`เลือกแล้ว (${isReferBack ? selectedBranchIds.size : selected.length})`}
           </Typography>
           <Button
             variant="outlined"
-            onClick={handleClearSelection}
+            onClick={isReferBack ? handleClearReferBackSelection : handleClearSelection}
             startIcon={<AddCircleIcon />}
             sx={{
               color: "#ef4444",
@@ -477,10 +510,12 @@ export default function DoctorBranchSelector({
         >
           {filteredBranches.map((branch) => {
             const count = branchSelectCount[String(branch.value)] || 0;
+            const isChecked = isReferBack ? selectedBranchIds.has(branch.value) : count > 0;
+            const isActive = isReferBack ? isChecked : count > 0;
             return (
               <Box
                 key={branch.value}
-                onClick={() => handleSelectDepartment(branch)}
+                onClick={() => isReferBack ? handleToggleBranch(branch) : handleSelectDepartment(branch)}
                 sx={{
                   display: "flex",
                   alignItems: "center",
@@ -490,11 +525,13 @@ export default function DoctorBranchSelector({
                   py: 2.5,
                   bgcolor: "#fff",
                   borderRadius: "16px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)",
+                  boxShadow: isActive
+                    ? "0px 10px 20px rgba(34, 197, 94, 0.15), 0px 4px 8px rgba(34, 197, 94, 0.1)"
+                    : "0 1px 3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
-                  border: count > 0 ? "2px solid #bbf7d0" : "2px solid transparent",
-                  transform: count > 0 ? "scale(1.01)" : "none",
+                  border: isActive ? "2px solid #bbf7d0" : "2px solid transparent",
+                  transform: isActive ? "scale(1.02)" : "none",
                   "&:hover": {
                     boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                     transform: "scale(1.01)",
@@ -502,12 +539,20 @@ export default function DoctorBranchSelector({
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-                  <GreenPlusIcon />
+                  {/* Icon: green map pin style matching Nuxt */}
+                  <Box sx={{
+                    width: 48, height: 48, borderRadius: "12px",
+                    bgcolor: isActive ? "#dcfce7" : "#f3f4f6",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                    transition: "all 0.2s",
+                  }}>
+                    <GreenPlusIcon />
+                  </Box>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography
                       sx={{
                         fontWeight: 600,
-                        color: count > 0 ? "#166534" : "#1f2937",
+                        color: isActive ? "#166534" : "#1f2937",
                         fontSize: "0.95rem",
                         wordBreak: "break-word",
                       }}
@@ -517,28 +562,37 @@ export default function DoctorBranchSelector({
                     {(branch.phone || branch.phoneExtension) && (
                       <Typography
                         variant="caption"
-                        sx={{ color: "#9ca3af", display: "block" }}
+                        sx={{ color: isActive ? "#16a34a" : "#9ca3af", display: "block" }}
                       >
-                        โทร {branch.phone || ""}{branch.phoneExtension ? ` ต่อ ${branch.phoneExtension}` : ""}
+                        {branch.phone || ""}{branch.phoneExtension ? ` ต่อ ${branch.phoneExtension}` : ""}
                       </Typography>
                     )}
                   </Box>
                 </Box>
-                {/* Right: count badge or plus icon */}
-                {count > 0 ? (
+                {/* Right: checkmark for referBack, count badge / plus for others */}
+                {isReferBack ? (
                   <Box
                     sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "50%",
-                      bgcolor: "#00AF75",
-                      color: "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 700,
-                      fontSize: "1rem",
+                      width: 32, height: 32, borderRadius: "50%",
+                      bgcolor: isChecked ? "#22c55e" : "#e5e7eb",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s",
+                      opacity: isChecked ? 1 : 0,
+                      transform: isChecked ? "scale(1)" : "scale(0.75)",
                       flexShrink: 0,
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </Box>
+                ) : count > 0 ? (
+                  <Box
+                    sx={{
+                      width: 40, height: 40, borderRadius: "50%",
+                      bgcolor: "#00AF75", color: "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontWeight: 700, fontSize: "1rem", flexShrink: 0,
                     }}
                   >
                     {count}
@@ -572,8 +626,8 @@ export default function DoctorBranchSelector({
         </Box>
       )}
 
-      {/* Selected departments table — always visible */}
-      <TableContainer component={Paper} sx={{ mt: 3, boxShadow: "none", border: "1px solid #e5e7eb", overflow: "visible" }}>
+      {/* Selected departments table — hidden in referBack mode */}
+      {!isReferBack && <TableContainer component={Paper} sx={{ mt: 3, boxShadow: "none", border: "1px solid #e5e7eb", overflow: "visible" }}>
           <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: "#036245" }}>
@@ -659,7 +713,7 @@ export default function DoctorBranchSelector({
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </TableContainer>}
 
       {/* Validation error toast — Nuxt style: white bg, red left border, red icon */}
       <Snackbar
@@ -699,7 +753,7 @@ export default function DoctorBranchSelector({
         </Box>
       </Snackbar>
 
-      {/* Bottom bar: ยกเลิก (left), ยืนยัน (right) */}
+      {/* Bottom bar: ยกเลิก (left), toggle + ยืนยัน/ยืนยันหรือข้าม (right) */}
       <Box
         sx={{
           display: "flex",
@@ -723,19 +777,47 @@ export default function DoctorBranchSelector({
         >
           ยกเลิก
         </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForwardIcon />}
-          onClick={handleProceed}
-          sx={{
-            bgcolor: "#00AF75",
-            "&:hover": { bgcolor: "#036245" },
-            textTransform: "none",
-            borderRadius: "8px",
-          }}
-        >
-          ยืนยัน
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* "ไม่อนุญาต" toggle — only in referBack mode */}
+          {isReferBack && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box
+                onClick={() => setIsChangeDoctorBranchDisallowed((prev) => !prev)}
+                sx={{
+                  width: 44, height: 24, borderRadius: 12,
+                  bgcolor: isChangeDoctorBranchDisallowed ? "#00AF75" : "#d1d5db",
+                  position: "relative", cursor: "pointer",
+                  transition: "background-color 0.2s",
+                }}
+              >
+                <Box sx={{
+                  width: 20, height: 20, borderRadius: "50%", bgcolor: "#fff",
+                  position: "absolute", top: 2,
+                  left: isChangeDoctorBranchDisallowed ? 22 : 2,
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </Box>
+              <Typography sx={{ color: "#6b7280", fontSize: "0.875rem", whiteSpace: "nowrap" }}>
+                ไม่อนุญาตให้ปลายทางส่งไปสาขา/แผนกอื่น
+              </Typography>
+            </Box>
+          )}
+          <Button
+            variant="contained"
+            endIcon={<ArrowForwardIcon />}
+            onClick={handleProceed}
+            sx={{
+              bgcolor: "#00AF75",
+              "&:hover": { bgcolor: "#036245" },
+              textTransform: "none",
+              borderRadius: "8px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isReferBack ? "ยืนยันหรือข้าม" : "ยืนยัน"}
+          </Button>
+        </Box>
       </Box>
 
     </Box>

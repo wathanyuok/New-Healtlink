@@ -1579,7 +1579,9 @@ function OPDReferralInner() {
 
       {/* Step 3: Doctor Branch */}
       {hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam && (
-        <DoctorBranchSelector hospitalId={hospitalIDParam || ""} hospitalName={hospitalParam} kind={kind} onNext={handleDoctorBranchNext}
+        <DoctorBranchSelector hospitalId={hospitalIDParam || ""} hospitalName={hospitalParam} kind={kind}
+          isReferBack={isReferBack}
+          onNext={handleDoctorBranchNext}
           onBack={() => router.push(`/create/opd?${buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "", deliveryPoint: "true" })}`)} />
       )}
 
