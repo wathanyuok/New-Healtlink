@@ -140,6 +140,7 @@ function RequestReferralInner() {
     referInfo,
     loading,
     updateFormData,
+    resetFormData,
     setReferInfo,
     fetchHospitals,
     fetchHospitalFilters,
@@ -169,11 +170,14 @@ function RequestReferralInner() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   // Store draft's fromHospital locally (NOT in global optionHospital to avoid Navbar side-effect)
   const draftFromHospitalRef = useRef<number | null>(null);
+  // Store draft's appointmentData & deliveryPointTypeEnd for save (avoids stale referInfo)
+  const draftAppointmentDataRef = useRef<any[]>([]);
+  const draftDeliveryPointEndIdRef = useRef<number | null>(null);
 
   // Track draft loaded state to signal form component
   const [draftLoaded, setDraftLoaded] = useState(0);
 
-  const isFormStep = !!(branchNamesParam && doctorBranchParam);
+  const isFormStep = !!(branchNamesParam && doctorBranchParam) || !!draftId;
 
   /* ── requestReferBack step-1 state (shows existing referrals to pick) ── */
   const { findAndCountReferral, checkReferPointHospital, findGroupCase } = useReferralStore();
@@ -269,11 +273,13 @@ function RequestReferralInner() {
   const referoutIdParam = searchParams.get("referout_id");
   useEffect(() => {
     if (!isRequestReferBack) return;
+    console.log("[GroupCase] Fetching groupCase/referout. groupCaseParam:", groupCaseParam, "referoutIdParam:", referoutIdParam);
     (async () => {
       try {
         // Priority 1: groupCase → fetch via findGroupCase
         if (groupCaseParam) {
           const res = await findGroupCase(groupCaseParam);
+          console.log("[GroupCase] findGroupCase response:", { hasDocuments: !!res?.referralDocuments, isArray: Array.isArray(res?.referralDocuments) });
           if (res?.referralDocuments) {
             const doc = Array.isArray(res.referralDocuments) ? res.referralDocuments[0] : res.referralDocuments;
             setReferGroupCase(doc);
@@ -281,14 +287,20 @@ function RequestReferralInner() {
             const patient = doc?.data?.patient;
             const hcodeSub = doc?.data?.visitData?.hcode_sub;
             if (patient) {
-              setReferGroupCasePatient({
+              const gcPatient = {
                 ...patient,
                 hcode_sub: hcodeSub,
                 patient_hn: doc?.HN,
                 patient_vn: doc?.VN,
                 patient_an: doc?.AN,
-              });
+              };
+              console.log("[GroupCase] Setting referGroupCasePatient:", { firstname: gcPatient.patient_firstname, lastname: gcPatient.patient_lastname, hn: gcPatient.patient_hn });
+              setReferGroupCasePatient(gcPatient);
+            } else {
+              console.warn("[GroupCase] No patient data in groupCase doc");
             }
+          } else {
+            console.warn("[GroupCase] No referralDocuments in response");
           }
           return;
         }
@@ -392,8 +404,10 @@ function RequestReferralInner() {
         // ไม่มีจุดรับปลายทาง → ไปเลือกแผนก/สาขาทันที (no referPoint)
         baseParams.docter_branch = "true";
       } else if (list.length === 1) {
-        // มีจุดรับปลายทาง 1 จุด → set referPoint + ไปเลือกแผนก/สาขา
+        // มีจุดรับปลายทาง 1 จุด → set referPoint + name + phone + ไปเลือกแผนก/สาขา
         baseParams.referPoint = String(list[0].id);
+        baseParams.referPointName = list[0].name || "";
+        baseParams.referPointPhone = list[0].phone || "";
         baseParams.docter_branch = "true";
       } else {
         // มีจุดรับปลายทางหลายจุด → ไปหน้าเลือกจุดรับ (no docter_branch, no referPoint)
@@ -425,23 +439,41 @@ function RequestReferralInner() {
     return pages;
   }, [referBackPage, rbTotalPages]);
 
+  // Reset form data on mount to avoid stale data from previous visits
   useEffect(() => {
+    resetFormData();
     if (typeof window !== "undefined") {
       const info = localStorage.getItem("patient_info");
       if (info) try { setPatientInfo(JSON.parse(info)); } catch { /* */ }
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load draft data if editing — map referInfo back into formData
   useEffect(() => {
     if (draftId) {
-      findOneReferral(draftId).then((res: any) => {
+      console.log("[Request Draft] Loading draft id:", draftId);
+      findOneReferral(draftId).then(async (res: any) => {
         const doc = res?.referralDocument || res;
         if (!doc || !doc.data) {
-          console.warn("[Request Draft] No valid document found in response");
+          console.warn("[Request Draft] No valid document found in response", res);
           return;
         }
+        console.log("[Request Draft] Draft doc loaded:", { id: doc.id, hasPatient: !!doc.data?.patient, hasVisitData: !!doc.data?.visitData, hasDoctor: !!doc.doctor, hasCause: !!doc.referralCause });
+        console.log("[Request Draft] doc.appointmentData:", JSON.stringify(doc.appointmentData));
+        console.log("[Request Draft] doc.deliveryPointTypeEnd:", JSON.stringify(doc.deliveryPointTypeEnd));
         setReferInfo(doc);
+
+        // Store draft's appointmentData & deliveryPointTypeEnd in refs for the save function
+        if (Array.isArray(doc.appointmentData) && doc.appointmentData.length > 0) {
+          draftAppointmentDataRef.current = doc.appointmentData;
+          console.log("[Request Draft] ✅ Stored appointmentData in ref:", draftAppointmentDataRef.current.length, "items");
+        } else {
+          console.log("[Request Draft] ⚠️ No appointmentData to store in ref. doc.appointmentData:", doc.appointmentData);
+        }
+        if (doc.deliveryPointTypeEnd?.id) {
+          draftDeliveryPointEndIdRef.current = doc.deliveryPointTypeEnd.id;
+          console.log("[Request Draft] ✅ Stored deliveryPointEndId in ref:", draftDeliveryPointEndIdRef.current);
+        }
 
         // NOTE: Do NOT set optionHospital here — it would show the hospital
         // in the Navbar dropdown, which Nuxt does not do. The form's fetch
@@ -459,19 +491,31 @@ function RequestReferralInner() {
         const patient = doc.data?.patient || {};
         const visitData = doc.data?.visitData || {};
 
-        // Calculate age from birthday
+        // Calculate age from birthday (handle ISO dates & both CE and BE year)
         let calculatedAge = "";
-        const bday = patient.patient_birthday || "";
+        const bday = (patient.patient_birthday || "").split("T")[0]; // strip ISO time
         if (bday) {
           const [by, bm, bd] = bday.split("-").map(Number);
           if (by && bm && bd) {
+            const ceYear = by > 2400 ? by - 543 : by;
             const now = new Date();
-            let age = now.getFullYear() - by;
+            let age = now.getFullYear() - ceYear;
             if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) {
               age--;
             }
             if (age >= 0) calculatedAge = `${age} ปี`;
           }
+        }
+
+        // Process deliveryPeriod matching Nuxt's referralInfo component
+        let deliveryPeriod: any[] = [];
+        if (Array.isArray(doc.deliveryPeriod) && doc.deliveryPeriod.length > 0) {
+          deliveryPeriod = doc.deliveryPeriod.map((period: any) => ({
+            startDelivery: period.startDelivery || "",
+            startDeliveryTime: "",
+            startDelivery2: period.endDelivery || "",
+            endDeliveryTime: "",
+          }));
         }
 
         const draftFormData: Record<string, any> = {
@@ -536,7 +580,10 @@ function RequestReferralInner() {
           acute_level: doc.acuteLevel ? String(doc.acuteLevel?.id ?? doc.acuteLevel) : "",
           is_infectious: doc.contagious ? "true" : "false",
           additionalComments: doc.moreDetail || "",
-          notes: doc.remark || "",
+          notes: doc.remark || doc.reasonForSending || "",
+          // Certification period & delivery period (matching Nuxt's referralInfo component)
+          certificationPeriod: doc.referralDeliveryPeriod?.id ? String(doc.referralDeliveryPeriod.id) : "",
+          ...(deliveryPeriod.length > 0 ? { deliveryPeriod } : {}),
           // Visit data
           temperature: visitData.temperature || "",
           bps: visitData.bps || "",
@@ -565,6 +612,13 @@ function RequestReferralInner() {
             : doc.data?.disease
               ? [{ id: 1, name: String(doc.data.disease) }]
               : [],
+          // Equipment — map from draft (matching Nuxt)
+          requiredEquipment: Array.isArray(doc.equipment)
+            ? doc.equipment.map((eq: any, idx: number) => ({
+                id: idx + 1,
+                name: typeof eq === "string" ? eq : eq?.name || String(eq),
+              }))
+            : [],
           // Files — map API referralFiles to DocumentItem format used by form UI
           referralFiles: doc.referralFiles || [],
           documents: (doc.referralFiles || [])
@@ -604,14 +658,51 @@ function RequestReferralInner() {
                   : [],
             };}),
         };
+        console.log("[Request Draft] Mapped draftFormData keys:", Object.keys(draftFormData).filter(k => {
+          const v = draftFormData[k];
+          return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+        }));
         updateFormData(draftFormData);
         // Signal form to pick up changes
         setDraftLoaded((c) => c + 1);
+
+        // ── requestReferBack: fetch groupCase from draft if not in URL ──
+        // Mirrors Nuxt's getFindOneGroupCaseDraft() + getFindOneGroupCase()
+        const draftGroupCaseId = doc.groupCase?.id;
+        if (isRequestReferBack && draftGroupCaseId && !groupCaseParam) {
+          console.log("[Request Draft] Draft has groupCase.id:", draftGroupCaseId, "— fetching groupCase data");
+          try {
+            const gcRes = await findGroupCase(String(draftGroupCaseId));
+            if (gcRes?.referralDocuments) {
+              const gcDoc = Array.isArray(gcRes.referralDocuments)
+                ? gcRes.referralDocuments[0]
+                : gcRes.referralDocuments;
+              setReferGroupCase(gcDoc);
+              const gcPatient = gcDoc?.data?.patient;
+              const hcodeSub = gcDoc?.data?.visitData?.hcode_sub;
+              if (gcPatient) {
+                setReferGroupCasePatient({
+                  ...gcPatient,
+                  hcode_sub: hcodeSub,
+                  patient_hn: gcDoc?.HN,
+                  patient_vn: gcDoc?.VN,
+                  patient_an: gcDoc?.AN,
+                });
+                console.log("[Request Draft] GroupCase patient set from draft's groupCase:", {
+                  firstname: gcPatient.patient_firstname,
+                  hn: gcDoc?.HN,
+                });
+              }
+            }
+          } catch (gcErr) {
+            console.error("[Request Draft] Error fetching groupCase from draft:", gcErr);
+          }
+        }
       }).catch((err) => {
         console.error("[Request Draft] Error loading draft:", err);
       });
     }
-  }, [draftId, findOneReferral, setReferInfo, updateFormData]);
+  }, [draftId, findOneReferral, setReferInfo, updateFormData, isRequestReferBack, groupCaseParam, findGroupCase]);
 
   const reloadHospitals = useCallback(
     (p?: number, s?: string, z?: string, t?: string, l?: number) => {
@@ -717,8 +808,10 @@ function RequestReferralInner() {
         // ไม่มีจุดรับปลายทาง → ไปเลือกแผนก/สาขาทันที
         baseParams.docter_branch = "true";
       } else if (list.length === 1) {
-        // มี 1 จุดรับ → set referPoint + ไปเลือกแผนก/สาขา
+        // มี 1 จุดรับ → set referPoint + name + phone + ไปเลือกแผนก/สาขา
         baseParams.referPoint = String(list[0].id);
+        baseParams.referPointName = list[0].name || "";
+        baseParams.referPointPhone = list[0].phone || "";
         baseParams.docter_branch = "true";
       } else {
         // มีหลายจุดรับ → ไปหน้าเลือกจุดรับ (no docter_branch)
@@ -843,6 +936,13 @@ function RequestReferralInner() {
         } else if (roleName === "superAdmin" || roleName === "superAdminZone") {
           // Use global optionHospital first, then draft's stored fromHospital as fallback
           fromHospitalId = authState.optionHospital ?? draftFromHospitalRef.current ?? undefined;
+          // Fallback for requestReferBack: use groupCase's toHospital (hospital that currently has the patient)
+          if (!fromHospitalId && isRequestReferBack && referGroupCase?.toHospital?.id) {
+            fromHospitalId = typeof referGroupCase.toHospital.id === "number"
+              ? referGroupCase.toHospital.id
+              : Number(referGroupCase.toHospital.id);
+            console.log("[Save] ✅ fromHospitalId fallback from groupCase.toHospital:", fromHospitalId);
+          }
         }
 
         const toHospitalId = hospitalIDParam ? parseInt(hospitalIDParam, 10) : undefined;
@@ -851,12 +951,14 @@ function RequestReferralInner() {
           alert("กรุณาเลือกสถานพยาบาลต้นทางก่อนบันทึก");
           setIsLoading(false);
           setSendData(false);
+          setShowLoadingOverlay(false);
           return;
         }
         if (!toHospitalId) {
           alert("ไม่พบข้อมูลสถานพยาบาลปลายทาง กรุณาลองใหม่อีกครั้ง");
           setIsLoading(false);
           setSendData(false);
+          setShowLoadingOverlay(false);
           return;
         }
 
@@ -871,23 +973,75 @@ function RequestReferralInner() {
         const isDraft = referInfo?.referralStatus?.name === "ฉบับร่าง";
         const referralTypeValue = isDraft ? undefined : (referralTypeMap[kind] ?? 0);
 
-        // ── appointmentData from branchData query param ──
+        // ── appointmentData from branchData query param, fallback to existing draft data ──
+        // appointmentType must be the Thai name string, not a number (API rejects numbers)
+        const appointmentTypeNameMap: Record<number, string> = {
+          1: "ระบุวัน/เวลา",
+          2: "รอนัดรักษาต่อเนื่อง",
+        };
         let appointmentData: any[] = [];
         try {
           const branchDataParam = searchParams.get("branchData");
+          console.log("[Save] branchDataParam:", branchDataParam);
           if (branchDataParam) {
             const branches = JSON.parse(branchDataParam);
-            appointmentData = branches.map((b: any) => ({
-              appointmentType: b.appointment ?? 1,
-              doctorBranchName: b.name || "",
-              appointmentDate: b.appointmentDate || "",
-              remark: b.remark || "",
-            }));
+            appointmentData = branches.map((b: any) => {
+              // Combine date + time into datetime string like Nuxt does (e.g. "2026-04-27T07:00")
+              let combinedDate = b.appointmentDate || "";
+              if (combinedDate && b.appointmentTime) {
+                combinedDate = `${combinedDate}T${b.appointmentTime}`;
+              }
+              return {
+                appointmentType: appointmentTypeNameMap[b.appointment] ?? "ระบุวัน/เวลา",
+                doctorBranchName: b.name || "",
+                appointmentDate: combinedDate,
+                remark: b.remark || "",
+              };
+            });
           }
-        } catch { /* ignore parse error */ }
+        } catch (e) { console.error("[Save] branchData parse error:", e); }
+        // Fallback: parse Nuxt-style query params (branch_type, datetime, remark)
+        if (appointmentData.length === 0) {
+          const branchTypeParam = searchParams.get("branch_type");
+          const datetimeParam = searchParams.get("datetime");
+          const remarkParam = searchParams.get("remark");
+          if (branchNamesParam && branchTypeParam) {
+            console.log("[Save] Using Nuxt-style params: branch_type=", branchTypeParam, "datetime=", datetimeParam);
+            const names = branchNamesParam.split(",");
+            const types = branchTypeParam.split(",");
+            const dates = (datetimeParam || "").split(",");
+            const remarks = (remarkParam || "").split(",");
+            const maxLen = Math.min(names.length, types.length);
+            for (let i = 0; i < maxLen; i++) {
+              const typeStr = types[i]?.trim() || "";
+              // Convert Nuxt type: could be "1", "2", or Thai name string
+              let appointmentTypeName = appointmentTypeNameMap[Number(typeStr)];
+              if (!appointmentTypeName) appointmentTypeName = typeStr || "ระบุวัน/เวลา";
+              appointmentData.push({
+                appointmentType: appointmentTypeName,
+                doctorBranchName: names[i]?.trim() || "",
+                appointmentDate: dates[i]?.trim() || "",
+                remark: remarks[i]?.trim() || "",
+              });
+            }
+          }
+        }
+        // Fallback: preserve existing appointmentData from draft when editing (requestReferBack)
+        // Use ref (set at draft load time) to avoid stale state issues
+        console.log("[Save] appointmentData from branchData param:", appointmentData.length, "| ref:", draftAppointmentDataRef.current.length);
+        if (appointmentData.length === 0 && draftAppointmentDataRef.current.length > 0) {
+          appointmentData = draftAppointmentDataRef.current;
+          console.log("[Save] ✅ Using appointmentData from ref:", JSON.stringify(appointmentData));
+        }
 
-        // ── deliveryPointTypeEnd from referPoint query param ──
-        const deliveryPointTypeEnd = referPointParam ? parseInt(referPointParam, 10) : undefined;
+        // ── deliveryPointTypeEnd from referPoint query param, fallback to existing draft data ──
+        let deliveryPointTypeEnd = referPointParam ? parseInt(referPointParam, 10) : undefined;
+        // Fallback: preserve existing deliveryPointTypeEnd from draft (via ref)
+        console.log("[Save] deliveryPointTypeEnd from param:", deliveryPointTypeEnd, "| ref:", draftDeliveryPointEndIdRef.current);
+        if (!deliveryPointTypeEnd && draftDeliveryPointEndIdRef.current) {
+          deliveryPointTypeEnd = draftDeliveryPointEndIdRef.current;
+          console.log("[Save] ✅ Using deliveryPointTypeEnd from ref:", deliveryPointTypeEnd);
+        }
 
         // ── Build payload matching Nuxt's saveData structure ──
         const payload: any = {
@@ -1057,7 +1211,8 @@ function RequestReferralInner() {
   const breadcrumbItems = useMemo(() => {
     // Determine current step index (0..4)
     let currentIdx = 1; // default: "เลือกสถานพยาบาลต้นทาง"
-    if (hospitalParam && deliveryPointParam && !doctorBranchParam) currentIdx = 2;
+    if (draftId) currentIdx = 4; // draft edit → jump to form step
+    else if (hospitalParam && deliveryPointParam && !doctorBranchParam) currentIdx = 2;
     else if (hospitalParam && deliveryPointParam && doctorBranchParam && !branchNamesParam) currentIdx = 3;
     else if (branchNamesParam) currentIdx = 4;
 
@@ -1776,8 +1931,8 @@ function RequestReferralInner() {
           onBack={() => router.push(`/create/request?${buildQuery({ hospital: hospitalParam, hospitalID: hospitalIDParam || "" })}`)} />
       )}
 
-      {/* ใบส่งตัวเดิม panel (requestReferBack only, at form step, not draft) */}
-      {isFormStep && isRequestReferBack && referGroupCase && referInfo?.referralStatus?.name !== "ฉบับร่าง" && (
+      {/* ใบส่งตัวเดิม panel (requestReferBack only, at form step) */}
+      {isFormStep && isRequestReferBack && referGroupCase && (
         <Box sx={{ mt: 3, p: 3, bgcolor: "#fff", borderRadius: "12px", border: "1px solid #e5e7eb" }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 500, color: "#111827", mb: 2 }}>
             ใบส่งตัวเดิม
@@ -1893,8 +2048,9 @@ function RequestReferralInner() {
             onUpdate={updateFormData}
             formErrors={formErrors}
             draftLoaded={draftLoaded}
-            referGroupCasePatient={isRequestReferBack ? (referGroupCasePatient || referGroupCase?.data?.patient) : undefined}
+            referGroupCasePatient={isRequestReferBack ? (referGroupCasePatient || referGroupCase?.data?.patient || referInfo?.data?.patient) : undefined}
             referGroupCase={isRequestReferBack ? referGroupCase : undefined}
+            referInfo={isRequestReferBack ? referInfo : (draftId ? referInfo : undefined)}
           />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>

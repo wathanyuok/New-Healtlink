@@ -400,6 +400,7 @@ interface Props {
   draftLoaded?: number; // counter that increments when draft data is loaded
   referGroupCasePatient?: any; // patient data from referBack groupCase
   referGroupCase?: any; // original referral document from groupCase
+  referInfo?: any; // draft document (for requestReferBack draft edit)
 }
 
 export default function RequestReferralForm({
@@ -413,6 +414,7 @@ export default function RequestReferralForm({
   draftLoaded = 0,
   referGroupCasePatient,
   referGroupCase,
+  referInfo,
 }: Props) {
   // Local form state merged with external (only non-empty external values override defaults)
   const [form, setForm] = useState<ReferralFormData>(() => {
@@ -446,32 +448,45 @@ export default function RequestReferralForm({
   };
 
   // Sync initial form values back to the store on mount
-  // so that handleSave in the parent can read the correct values
+  // so that handleSave in the parent can read the correct values.
+  // Only sync fields that are NOT empty — this avoids overwriting draft/groupCase
+  // data that was loaded into the store before the form mounted.
   const initialSynced = useRef(false);
   useEffect(() => {
     if (!initialSynced.current) {
       initialSynced.current = true;
-      onUpdate(form);
+      // Only push non-empty fields to avoid wiping store data from draft/groupCase loading
+      const nonEmpty: Record<string, any> = {};
+      Object.entries(form).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
+          nonEmpty[key] = value;
+        }
+      });
+      if (Object.keys(nonEmpty).length > 0) {
+        onUpdate(nonEmpty);
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When draft data is loaded (signalled by draftLoaded counter), update local form state
   const lastProcessedDraftLoaded = useRef(0);
   useEffect(() => {
+    console.log("[Form draftLoaded effect] draftLoaded:", draftLoaded, "lastProcessed:", lastProcessedDraftLoaded.current);
     if (draftLoaded === 0) return; // skip initial render
     if (!externalFormData) return;
     // Check if external data has meaningful content (not just empty defaults)
     const hasData = Object.values(externalFormData).some((v) =>
       v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
     );
-    if (!hasData) return;
+    if (!hasData) { console.log("[Form draftLoaded effect] No meaningful data in externalFormData"); return; }
     // Only sync back to store once per draftLoaded increment (avoid infinite loop:
     // onUpdate → store changes → externalFormData changes → effect re-runs → onUpdate …)
     const shouldSyncToStore = draftLoaded !== lastProcessedDraftLoaded.current;
     if (shouldSyncToStore) lastProcessedDraftLoaded.current = draftLoaded;
+    // Collect fields to sync to store OUTSIDE of setForm to avoid setState-during-render
+    const storeSync: Record<string, any> = {};
     setForm((prev) => {
       const merged = { ...prev };
-      const storeSync: Record<string, any> = {};
       Object.entries(externalFormData).forEach(([key, value]) => {
         // Skip internal metadata keys
         if (key.startsWith("_draft")) return;
@@ -480,13 +495,13 @@ export default function RequestReferralForm({
           if (shouldSyncToStore) storeSync[key] = value;
         }
       });
-      // Sync merged draft data back to the store so validation reads correct values
-      // (the initial sync effect may have overwritten the store with empty defaults)
-      if (shouldSyncToStore && Object.keys(storeSync).length > 0) {
-        onUpdate(storeSync);
-      }
       return merged;
     });
+    // Sync merged draft data back to the store so validation reads correct values
+    // (the initial sync effect may have overwritten the store with empty defaults)
+    if (shouldSyncToStore && Object.keys(storeSync).length > 0) {
+      onUpdate(storeSync);
+    }
 
     // Store draft doctor/cause in refs so they survive fetch overwrites
     const draftDoctorData = (externalFormData as any)?._draftDoctor;
@@ -514,6 +529,7 @@ export default function RequestReferralForm({
 
   // Pre-fill patient + visit + health data from referBack groupCase
   useEffect(() => {
+    console.log("[Form groupCase effect] referGroupCasePatient:", !!referGroupCasePatient, "referGroupCase:", !!referGroupCase);
     if (!referGroupCasePatient && !referGroupCase) return;
     const fields: Partial<ReferralFormData> = {};
 
@@ -530,12 +546,15 @@ export default function RequestReferralForm({
       if (p.patient_sex || p.patient_gender) fields.patient_sex = p.patient_sex || p.patient_gender;
       const bday = p.patient_birthday || p.patient_dob || "";
       if (bday) {
-        fields.patient_birthday = bday;
-        // Calculate age from birthday
-        const [by, bm, bd] = bday.split("-").map(Number);
+        // Strip ISO time portion (e.g. "1997-12-10T00:00:00.000Z" → "1997-12-10")
+        const bdayDate = bday.split("T")[0];
+        fields.patient_birthday = bdayDate;
+        // Calculate age from birthday (handle both CE and BE year)
+        const [by, bm, bd] = bdayDate.split("-").map(Number);
         if (by && bm && bd) {
+          const ceYear = by > 2400 ? by - 543 : by;
           const now = new Date();
-          let age = now.getFullYear() - by;
+          let age = now.getFullYear() - ceYear;
           if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) age--;
           if (age >= 0) fields.patient_age = `${age} ปี`;
         }
@@ -669,8 +688,11 @@ export default function RequestReferralForm({
     }
 
     if (Object.keys(fields).length > 0) {
+      console.log("[Form groupCase effect] Setting fields:", Object.keys(fields));
       setForm((prev) => ({ ...prev, ...fields }));
       onUpdate(fields);
+    } else {
+      console.log("[Form groupCase effect] No fields to set");
     }
   }, [referGroupCasePatient, referGroupCase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -785,8 +807,10 @@ export default function RequestReferralForm({
 // Branch data from query params (branchData is JSON array from DoctorBranchSelector)
   const branchList = (() => {
     try {
+      console.log("[Form branchList] searchParams.branchData:", searchParams.branchData ? `"${searchParams.branchData.substring(0, 100)}..."` : "EMPTY");
       if (searchParams.branchData) {
         const data = JSON.parse(searchParams.branchData);
+        console.log("[Form branchList] Parsed branchData:", JSON.stringify(data));
         return data.map((item: any, i: number) => ({
           index: i + 1,
           name: item.name || "",
@@ -796,24 +820,85 @@ export default function RequestReferralForm({
           remark: item.remark || "",
         }));
       }
-    } catch { /* fallback */ }
-    // Fallback: parse from branchNames
-    return branchNames
-      ? branchNames.split(",").map((name: string, i: number) => ({
+    } catch (e) { console.error("[Form branchList] JSON parse error:", e); }
+    // Fallback: parse Nuxt-style query params (branch_type, datetime, remark)
+    if (branchNames && searchParams.branch_type) {
+      console.log("[Form branchList] Using Nuxt-style params: branch_type=", searchParams.branch_type, "datetime=", searchParams.datetime);
+      const types = (searchParams.branch_type || "").split(",");
+      const dates = (searchParams.datetime || "").split(",");
+      const remarks = (searchParams.remark || "").split(",");
+      return branchNames.split(",").map((name: string, i: number) => {
+        const typeVal = types[i]?.trim() || "";
+        const isWaiting = typeVal === "2" || typeVal === "รอนัดรักษาต่อเนื่อง";
+        const rawDate = dates[i]?.trim() || "";
+        // Parse datetime: could be "2026-04-27T07:00" or "2026-04-27"
+        let apptDate = "";
+        let apptTime = "";
+        if (rawDate) {
+          if (rawDate.includes("T")) {
+            const [datePart, timePart] = rawDate.split("T");
+            apptDate = datePart;
+            apptTime = timePart || "";
+          } else {
+            apptDate = rawDate;
+          }
+        }
+        return {
           index: i + 1,
           name: name.trim(),
-          appointmentDate: "",
-          appointmentTime: "",
-          appointment: 1,
-          remark: "",
-        }))
-      : [];
+          appointmentDate: apptDate,
+          appointmentTime: apptTime,
+          appointment: isWaiting ? 2 : 1,
+          remark: remarks[i]?.trim() || "",
+        };
+      });
+    }
+    // Fallback: parse from branchNames only (no date/time info)
+    if (branchNames) {
+      return branchNames.split(",").map((name: string, i: number) => ({
+        index: i + 1,
+        name: name.trim(),
+        appointmentDate: "",
+        appointmentTime: "",
+        appointment: 1,
+        remark: "",
+      }));
+    }
+    // Fallback for draft edit: use appointmentData from draft document or groupCase
+    const apptData = referInfo?.appointmentData || referGroupCase?.appointmentData;
+    if (apptData && Array.isArray(apptData) && apptData.length > 0) {
+      return apptData.map((item: any, i: number) => {
+        let apptDate = "";
+        let apptTime = "";
+        if (item.appointmentDate) {
+          const dt = new Date(item.appointmentDate);
+          if (!isNaN(dt.getTime())) {
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, "0");
+            const d = String(dt.getDate()).padStart(2, "0");
+            apptDate = `${y}-${m}-${d}`;
+            apptTime = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+          }
+        }
+        return {
+          index: i + 1,
+          name: item.doctorBranchName || item.name || "",
+          appointmentDate: apptDate,
+          appointmentTime: apptTime,
+          appointment: item.appointmentType === "รอนัดรักษาต่อเนื่อง" ? 2 : 1,
+          remark: item.remark === "undefined" ? "" : (item.remark || ""),
+        };
+      });
+    }
+    return [];
   })();
 
-  // Referral point info from query params
-  const referPointName = searchParams.referPointName || "";
-  const referPointPhone = searchParams.referPointPhone || "";
-  const referPointPhone2 = searchParams.referPointPhone2 || "";
+  // Referral point info — prefer query params, fallback to groupCase/draft deliveryPointTypeEnd
+  const deliveryPointEnd = referGroupCase?.deliveryPointTypeEnd || referInfo?.deliveryPointTypeEnd;
+  console.log("[Form] referGroupCase:", !!referGroupCase, "referInfo:", !!referInfo, "deliveryPointEnd:", !!deliveryPointEnd, deliveryPointEnd?.name);
+  const referPointName = searchParams.referPointName || deliveryPointEnd?.name || "";
+  const referPointPhone = searchParams.referPointPhone || deliveryPointEnd?.phone || "";
+  const referPointPhone2 = searchParams.referPointPhone2 || deliveryPointEnd?.phone2 || "";
 
   /* ---- Image handling ---- */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2540,11 +2625,12 @@ export default function RequestReferralForm({
                       value={form.patient_birthday}
                       onChange={(val) => {
                         updateField("patient_birthday", val);
-                        // Auto-calculate age
+                        // Auto-calculate age (handle both CE and BE year)
                         if (val) {
                           const [by, bm, bd] = val.split("-").map(Number);
+                          const ceYear = by > 2400 ? by - 543 : by;
                           const now = new Date();
-                          let age = now.getFullYear() - by;
+                          let age = now.getFullYear() - ceYear;
                           if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) {
                             age--;
                           }
