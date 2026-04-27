@@ -577,6 +577,7 @@ function RequestReferralInner() {
           // Referral info — convert to String for MUI Select matching
           referralCreationPoint: String(doc.deliveryPointTypeStart?.id || doc.deliveryPointTypeStart || ""),
           referral_cause: String(doc.referralCause?.id || doc.referralCause || ""),
+          referral_reason: doc.referralStatusDetail?.id ? String(doc.referralStatusDetail.id) : String(doc.referralStatusDetail || ""),
           acute_level: doc.acuteLevel ? String(doc.acuteLevel?.id ?? doc.acuteLevel) : "",
           is_infectious: doc.contagious ? "true" : "false",
           additionalComments: doc.moreDetail || "",
@@ -1030,8 +1031,21 @@ function RequestReferralInner() {
         // Use ref (set at draft load time) to avoid stale state issues
         console.log("[Save] appointmentData from branchData param:", appointmentData.length, "| ref:", draftAppointmentDataRef.current.length);
         if (appointmentData.length === 0 && draftAppointmentDataRef.current.length > 0) {
-          appointmentData = draftAppointmentDataRef.current;
-          console.log("[Save] ✅ Using appointmentData from ref:", JSON.stringify(appointmentData));
+          // Convert ref data: API returns appointmentType as number (1, 2) but API save expects Thai string
+          appointmentData = draftAppointmentDataRef.current.map((item: any) => {
+            let typeName = item.appointmentType;
+            // If it's a number, convert to Thai string
+            if (typeof typeName === "number") {
+              typeName = appointmentTypeNameMap[typeName] ?? "ระบุวัน/เวลา";
+            } else if (typeName && !isNaN(Number(typeName))) {
+              typeName = appointmentTypeNameMap[Number(typeName)] ?? typeName;
+            }
+            return {
+              ...item,
+              appointmentType: typeName || "ระบุวัน/เวลา",
+            };
+          });
+          console.log("[Save] ✅ Using appointmentData from ref (converted):", JSON.stringify(appointmentData));
         }
 
         // ── deliveryPointTypeEnd from referPoint query param, fallback to existing draft data ──
@@ -1073,9 +1087,9 @@ function RequestReferralInner() {
           moreDetail: formData.infectious_detail || formData.additionalComments || undefined,
           remark: formData.notes || undefined,
           reasonForSending: formData.notes || undefined,
-          // referralStatusDetail is integer in DB — only send if value is numeric (from a select with IDs)
+          // referralStatusDetail is integer in DB — Nuxt uses a dropdown (sends ID), so only send numeric values
           ...(formData.referral_reason && /^\d+$/.test(String(formData.referral_reason))
-            ? { referralStatusDetail: formData.referral_reason }
+            ? { referralStatusDetail: Number(formData.referral_reason) }
             : {}),
           equipment: (formData.requiredEquipment || []).map((item: any) => typeof item === "string" ? item : item?.name || "").filter(Boolean),
           isChangeDoctorBranch: false,

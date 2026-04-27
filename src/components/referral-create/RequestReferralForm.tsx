@@ -840,7 +840,18 @@ export default function RequestReferralForm({
             apptDate = datePart;
             apptTime = timePart || "";
           } else {
-            apptDate = rawDate;
+            // Date-only string like "2026-04-27" — use new Date() to match Nuxt behavior
+            // new Date("2026-04-27") = UTC midnight → local time in Thailand = 07:00
+            const dt = new Date(rawDate);
+            if (!isNaN(dt.getTime())) {
+              const y = dt.getFullYear();
+              const m = String(dt.getMonth() + 1).padStart(2, "0");
+              const d = String(dt.getDate()).padStart(2, "0");
+              apptDate = `${y}-${m}-${d}`;
+              apptTime = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+            } else {
+              apptDate = rawDate;
+            }
           }
         }
         return {
@@ -871,6 +882,8 @@ export default function RequestReferralForm({
         let apptDate = "";
         let apptTime = "";
         if (item.appointmentDate) {
+          // Use new Date() with local timezone to match Nuxt behavior
+          // "2026-04-27" → UTC midnight → local time (Thailand +7) = 07:00
           const dt = new Date(item.appointmentDate);
           if (!isNaN(dt.getTime())) {
             const y = dt.getFullYear();
@@ -2114,9 +2127,9 @@ export default function RequestReferralForm({
                   fullWidth
                   size="small"
                   placeholder="เหตุผลการส่งตัว (ถ้ามี)"
-                  value={form.referral_reason}
+                  value={form.notes || ""}
                   onChange={(e) =>
-                    updateField("referral_reason", e.target.value)
+                    updateField("notes", e.target.value)
                   }
                 />
               </Box>
