@@ -413,6 +413,28 @@ export default function ThaiDateInput({
   /* ---- YEAR VIEW ---- */
   const renderYearView = () => (
     <>
+      {/* Year page navigation */}
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <IconButton size="small" onClick={() => setYearPageStart((p) => p - 15)} sx={{ color: "#374151" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </IconButton>
+        <Typography sx={{ fontWeight: 600, fontSize: "0.9rem", color: "#1f2937" }}>
+          {yearPageStart + 543} - {yearPageStart + 14 + 543}
+        </Typography>
+        <IconButton
+          size="small"
+          onClick={() => setYearPageStart((p) => p + 15)}
+          disabled={!!maxDate && yearPageStart + 15 > Number(maxDate.substring(0, 4))}
+          sx={{ color: "#374151", "&.Mui-disabled": { opacity: 0.3 } }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </IconButton>
+      </Box>
+
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, mb: 2 }}>
         {yearGridItems.map((yr) => {
           const isCurrent = yr === tempYear;

@@ -456,6 +456,7 @@ export default function RequestReferralForm({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When draft data is loaded (signalled by draftLoaded counter), update local form state
+  const lastProcessedDraftLoaded = useRef(0);
   useEffect(() => {
     if (draftLoaded === 0) return; // skip initial render
     if (!externalFormData) return;
@@ -464,15 +465,26 @@ export default function RequestReferralForm({
       v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
     );
     if (!hasData) return;
+    // Only sync back to store once per draftLoaded increment (avoid infinite loop:
+    // onUpdate → store changes → externalFormData changes → effect re-runs → onUpdate …)
+    const shouldSyncToStore = draftLoaded !== lastProcessedDraftLoaded.current;
+    if (shouldSyncToStore) lastProcessedDraftLoaded.current = draftLoaded;
     setForm((prev) => {
       const merged = { ...prev };
+      const storeSync: Record<string, any> = {};
       Object.entries(externalFormData).forEach(([key, value]) => {
         // Skip internal metadata keys
         if (key.startsWith("_draft")) return;
         if (value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0)) {
           (merged as any)[key] = value;
+          if (shouldSyncToStore) storeSync[key] = value;
         }
       });
+      // Sync merged draft data back to the store so validation reads correct values
+      // (the initial sync effect may have overwritten the store with empty defaults)
+      if (shouldSyncToStore && Object.keys(storeSync).length > 0) {
+        onUpdate(storeSync);
+      }
       return merged;
     });
 
@@ -500,36 +512,167 @@ export default function RequestReferralForm({
     }
   }, [draftLoaded, externalFormData]);
 
-  // Pre-fill patient data from referBack groupCase
+  // Pre-fill patient + visit + health data from referBack groupCase
   useEffect(() => {
-    if (!referGroupCasePatient) return;
-    const p = referGroupCasePatient;
-    const patientFields: Partial<ReferralFormData> = {};
-    if (p.patient_prefix) patientFields.patient_prefix = p.patient_prefix;
-    if (p.patient_firstname) patientFields.patient_firstname = p.patient_firstname;
-    if (p.patient_lastname) patientFields.patient_lastname = p.patient_lastname;
-    if (p.patient_pid) patientFields.patient_pid = p.patient_pid;
-    if (p.patient_hn) patientFields.patient_hn = p.patient_hn;
-    if (p.patient_an) patientFields.patient_an = p.patient_an;
-    if (p.patient_vn) patientFields.patient_vn = p.patient_vn;
-    if (p.patient_age) patientFields.patient_age = String(p.patient_age);
-    if (p.patient_sex || p.patient_gender) patientFields.patient_sex = p.patient_sex || p.patient_gender;
-    if (p.patient_birthday || p.patient_dob) patientFields.patient_birthday = p.patient_birthday || p.patient_dob;
-    if (p.patient_phone) patientFields.patient_phone = p.patient_phone;
-    if (p.patient_blood_group) patientFields.patient_blood_group = p.patient_blood_group;
-    // Address fields
-    if (p.patient_house) patientFields.patient_house = p.patient_house;
-    if (p.patient_moo) patientFields.patient_moo = p.patient_moo;
-    if (p.patient_road) patientFields.patient_road = p.patient_road;
-    if (p.patient_alley) patientFields.patient_alley = p.patient_alley;
-    if (p.patient_tambon) patientFields.patient_tambon = p.patient_tambon;
-    if (p.patient_amphur) patientFields.patient_amphur = p.patient_amphur;
-    if (p.patient_changwat) patientFields.patient_changwat = p.patient_changwat;
-    if (p.patient_zipcode) patientFields.patient_zipcode = p.patient_zipcode;
+    if (!referGroupCasePatient && !referGroupCase) return;
+    const fields: Partial<ReferralFormData> = {};
 
-    setForm((prev) => ({ ...prev, ...patientFields }));
-    onUpdate(patientFields);
-  }, [referGroupCasePatient]); // eslint-disable-line react-hooks/exhaustive-deps
+    // ── Patient demographics ──
+    if (referGroupCasePatient) {
+      const p = referGroupCasePatient;
+      if (p.patient_prefix) fields.patient_prefix = p.patient_prefix;
+      if (p.patient_firstname) fields.patient_firstname = p.patient_firstname;
+      if (p.patient_lastname) fields.patient_lastname = p.patient_lastname;
+      if (p.patient_pid) fields.patient_pid = p.patient_pid;
+      if (p.patient_hn) fields.patient_hn = p.patient_hn;
+      if (p.patient_an) fields.patient_an = p.patient_an;
+      if (p.patient_vn) fields.patient_vn = p.patient_vn;
+      if (p.patient_sex || p.patient_gender) fields.patient_sex = p.patient_sex || p.patient_gender;
+      const bday = p.patient_birthday || p.patient_dob || "";
+      if (bday) {
+        fields.patient_birthday = bday;
+        // Calculate age from birthday
+        const [by, bm, bd] = bday.split("-").map(Number);
+        if (by && bm && bd) {
+          const now = new Date();
+          let age = now.getFullYear() - by;
+          if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) age--;
+          if (age >= 0) fields.patient_age = `${age} ปี`;
+        }
+      }
+      if (p.patient_age && !fields.patient_age) fields.patient_age = String(p.patient_age);
+      if (p.patient_phone || p.patient_mobile_phone) fields.patient_phone = p.patient_phone || p.patient_mobile_phone;
+      if (p.patient_blood_group) fields.patient_blood_group = p.patient_blood_group;
+      if (p.patient_treatment) fields.patient_treatment = p.patient_treatment;
+      if (p.patient_treatment_hospital) fields.patient_treatment_hospital = p.patient_treatment_hospital;
+      // Address
+      if (p.patient_house) fields.patient_house = p.patient_house;
+      if (p.patient_moo) fields.patient_moo = p.patient_moo;
+      if (p.patient_road) fields.patient_road = p.patient_road;
+      if (p.patient_alley) fields.patient_alley = p.patient_alley;
+      if (p.patient_tambon) fields.patient_tambon = p.patient_tambon;
+      if (p.patient_amphur) fields.patient_amphur = p.patient_amphur;
+      if (p.patient_changwat) fields.patient_changwat = p.patient_changwat;
+      if (p.patient_zipcode) fields.patient_zipcode = p.patient_zipcode;
+      if (p.patient_zip_code) fields.patient_zipcode = p.patient_zip_code;
+      // Emergency contact
+      if (p.patient_contact_full_name) fields.patient_contact_full_name = p.patient_contact_full_name;
+      if (p.patient_contact_mobile_phone) fields.patient_contact_mobile_phone = p.patient_contact_mobile_phone;
+      if (p.patient_contact_relation) fields.patient_contact_relation = p.patient_contact_relation;
+      if (p.patient_contact_full_name) {
+        fields.emergency_contacts = [{
+          name: p.patient_contact_full_name || "",
+          phone: p.patient_contact_mobile_phone || "",
+          relation: p.patient_contact_relation || "",
+        }];
+      }
+    }
+
+    // ── Visit data / vital signs from referGroupCase ──
+    if (referGroupCase) {
+      const visitData = referGroupCase.data?.visitData;
+      if (visitData) {
+        if (visitData.temperature) fields.temperature = visitData.temperature;
+        if (visitData.bps) fields.bps = visitData.bps;
+        if (visitData.bpd) fields.bpd = visitData.bpd;
+        if (visitData.pulse) fields.pulse = visitData.pulse;
+        if (visitData.rr) fields.rr = visitData.rr;
+        if (visitData.visit_primary_symptom_main_symptom) fields.visit_primary_symptom_main_symptom = visitData.visit_primary_symptom_main_symptom;
+        if (visitData.visit_primary_symptom_current_illness) fields.visit_primary_symptom_current_illness = visitData.visit_primary_symptom_current_illness;
+        if (visitData.pe) fields.pe = visitData.pe;
+        if (visitData.Imp) fields.Imp = visitData.Imp;
+        if (visitData.moreDetail) fields.moreDetail = visitData.moreDetail;
+        // ICD-10
+        if (visitData.icd10Basic) fields.icd10Basic = visitData.icd10Basic;
+        if (visitData.icd10 && Array.isArray(visitData.icd10) && visitData.icd10.length > 0) fields.icd10 = visitData.icd10;
+        if (visitData.icd10MoreBasic) fields.icd10MoreBasic = visitData.icd10MoreBasic;
+        if (visitData.icd10More && Array.isArray(visitData.icd10More) && visitData.icd10More.length > 0) fields.icd10More = visitData.icd10More;
+      }
+
+      // ── Drugs / medicines ──
+      const drugs = referGroupCase.data?.drugs;
+      if (drugs && Array.isArray(drugs) && drugs.length > 0) {
+        fields.medicines = drugs;
+      }
+
+      // ── Health info: drugAllergy, vaccines, disease/physicalExam ──
+      const healthInfo = referGroupCase.data?.healthInfo || referGroupCase.data;
+      if (healthInfo) {
+        if (healthInfo.drugAllergy && Array.isArray(healthInfo.drugAllergy) && healthInfo.drugAllergy.length > 0) {
+          fields.drugAllergy = healthInfo.drugAllergy;
+        }
+        if (healthInfo.vaccines && Array.isArray(healthInfo.vaccines) && healthInfo.vaccines.length > 0) {
+          fields.vaccines = healthInfo.vaccines;
+        }
+        if (healthInfo.physicalExam) fields.physicalExam = healthInfo.physicalExam;
+        if (healthInfo.disease) {
+          fields.diseases = Array.isArray(healthInfo.disease)
+            ? healthInfo.disease
+            : [{ id: 1, name: String(healthInfo.disease) }];
+        }
+      }
+
+      // ── Referral-level fields (cause, acute, doctor, equipment) ──
+      const causeId = referGroupCase.referralCause?.id || referGroupCase.referralCause;
+      if (causeId) {
+        fields.referral_cause = String(causeId);
+        // Store in ref so it survives the fetchReferralCauses overwrite
+        const causeObj = referGroupCase.referralCause?.id
+          ? { id: referGroupCase.referralCause.id, name: referGroupCase.referralCause.name || "" }
+          : null;
+        if (causeObj) {
+          draftCauseRef.current = causeObj;
+          const store = useReferralCreateStore.getState();
+          if (!store.referralCauses.find((c: any) => String(c.id) === String(causeObj.id))) {
+            useReferralCreateStore.setState({ referralCauses: [...store.referralCauses, causeObj] });
+          }
+        }
+      }
+      if (referGroupCase.acuteLevel) {
+        fields.acute_level = String(referGroupCase.acuteLevel?.id ?? referGroupCase.acuteLevel);
+      }
+      if (referGroupCase.contagious !== undefined) {
+        fields.is_infectious = referGroupCase.contagious ? "true" : "false";
+      }
+      if (referGroupCase.moreDetail) fields.additionalComments = referGroupCase.moreDetail;
+      // Doctor info
+      if (referGroupCase.doctor?.id || referGroupCase.doctor) {
+        fields.prescribingDoctor = String(referGroupCase.doctor?.id || referGroupCase.doctor);
+        if (referGroupCase.doctorName) fields.docterName = referGroupCase.doctorName;
+        if (referGroupCase.doctorIdentifyNumber) fields.doctorCode = referGroupCase.doctorIdentifyNumber;
+        if (referGroupCase.doctorDepartment) fields.medicalDepartment = referGroupCase.doctorDepartment;
+        if (referGroupCase.doctorPhone) fields.doctorContactNumber = String(referGroupCase.doctorPhone);
+        // Store in ref so it survives the fetchDoctorUsers overwrite
+        const docObj = referGroupCase.doctor?.id ? {
+          id: referGroupCase.doctor.id,
+          name: referGroupCase.doctor.fullName || referGroupCase.doctorName || "",
+          email: referGroupCase.doctor.email || "",
+          phone: referGroupCase.doctor.phone || "",
+          licenseNumber: referGroupCase.doctor.identifyNumber || referGroupCase.doctorIdentifyNumber || "",
+          department: referGroupCase.doctor.department || referGroupCase.doctorDepartment || "",
+        } : null;
+        if (docObj) {
+          draftDoctorRef.current = docObj;
+          const store = useReferralCreateStore.getState();
+          if (!store.doctorUsers.find((d: any) => String(d.id) === String(docObj.id))) {
+            useReferralCreateStore.setState({ doctorUsers: [...store.doctorUsers, docObj] });
+          }
+        }
+      }
+      // Equipment
+      const equip = referGroupCase.equipment || referGroupCase.data?.equipment;
+      if (equip && Array.isArray(equip) && equip.length > 0) {
+        fields.requiredEquipment = equip.map((e: any, i: number) =>
+          typeof e === "string" ? { id: i + 1, name: e } : { id: e.id || i + 1, name: e.name || String(e) }
+        );
+      }
+    }
+
+    if (Object.keys(fields).length > 0) {
+      setForm((prev) => ({ ...prev, ...fields }));
+      onUpdate(fields);
+    }
+  }, [referGroupCasePatient, referGroupCase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = useCallback(
     (field: keyof ReferralFormData, value: any) => {
@@ -1412,14 +1555,12 @@ export default function RequestReferralForm({
                     sx={{ fontWeight: 500, fontSize: "1rem", mt: 3, mb: 0.5 }}
                   >
                     เบอร์ติดต่อจุดสร้างใบส่งตัว
-                    {kind !== "requestReferOut" && kind !== "requestReferBack" && (
-                      <Typography
-                        component="span"
-                        sx={{ color: "#ef4444", ml: 0.5 }}
-                      >
-                        *
-                      </Typography>
-                    )}
+                    <Typography
+                      component="span"
+                      sx={{ color: "#ef4444", ml: 0.5 }}
+                    >
+                      *
+                    </Typography>
                   </Typography>
                   {(() => {
                     if (kind === "requestReferOut" || kind === "requestReferBack") {

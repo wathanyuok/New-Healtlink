@@ -162,6 +162,7 @@ function RequestReferralInner() {
   const [patientInfo, setPatientInfo] = useState<{ firstname?: string; lastname?: string } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [referGroupCase, setReferGroupCase] = useState<any>(null);
+  const [referGroupCasePatient, setReferGroupCasePatient] = useState<any>(null);
 
   const groupCaseParam = searchParams.get("groupCase");
 
@@ -262,7 +263,7 @@ function RequestReferralInner() {
       fetchReferBackList({ page: 1 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRequestReferBack, hospitalParam]);
+  }, [isRequestReferBack, hospitalParam, optionHospital]);
 
   // Fetch groupCase / referout data for ใบส่งตัวเดิม panel (requestReferBack)
   const referoutIdParam = searchParams.get("referout_id");
@@ -276,6 +277,18 @@ function RequestReferralInner() {
           if (res?.referralDocuments) {
             const doc = Array.isArray(res.referralDocuments) ? res.referralDocuments[0] : res.referralDocuments;
             setReferGroupCase(doc);
+            // Extract patient data matching Nuxt's getFindOneGroupCase logic
+            const patient = doc?.data?.patient;
+            const hcodeSub = doc?.data?.visitData?.hcode_sub;
+            if (patient) {
+              setReferGroupCasePatient({
+                ...patient,
+                hcode_sub: hcodeSub,
+                patient_hn: doc?.HN,
+                patient_vn: doc?.VN,
+                patient_an: doc?.AN,
+              });
+            }
           }
           return;
         }
@@ -283,7 +296,18 @@ function RequestReferralInner() {
         if (referoutIdParam) {
           const res = await findOneReferral(referoutIdParam);
           if (res?.referralDocument) {
-            setReferGroupCase(res.referralDocument);
+            const doc = res.referralDocument;
+            setReferGroupCase(doc);
+            // Extract patient data (exclude patient_hn like Nuxt's getFindOneReferOut)
+            const patient = doc?.data?.patient;
+            const hcodeSub = doc?.data?.visitData?.hcode_sub;
+            if (patient) {
+              const { patient_hn, ...patientWithoutHn } = patient;
+              setReferGroupCasePatient({
+                ...patientWithoutHn,
+                hcode_sub: hcodeSub,
+              });
+            }
           }
         }
       } catch (err) {
@@ -1594,7 +1618,7 @@ function RequestReferralInner() {
                         <Typography variant="body2">{item?.toHospital?.name || "-"}</Typography>
                       </TableCell>
                       <TableCell align="center">
-                        <Typography variant="body2">{item?.subType?.name || "-"}</Typography>
+                        <Typography variant="body2">{item?.subType?.name || "ไม่มีประเภท"}</Typography>
                       </TableCell>
                       <TableCell align="center">
                         {item?.referralStatus?.name ? (
@@ -1869,6 +1893,8 @@ function RequestReferralInner() {
             onUpdate={updateFormData}
             formErrors={formErrors}
             draftLoaded={draftLoaded}
+            referGroupCasePatient={isRequestReferBack ? (referGroupCasePatient || referGroupCase?.data?.patient) : undefined}
+            referGroupCase={isRequestReferBack ? referGroupCase : undefined}
           />
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2, mt: 3 }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon sx={{ color: "#00AF75" }} />} onClick={navigateBack} sx={{ textTransform: "none" }}>ย้อนกลับ</Button>
