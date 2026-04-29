@@ -715,11 +715,13 @@ export default function RequestReferralForm({
   // Referral creation point options (all types: ER / IPD / OPD) — keep raw to access phone/phone2
   const [erReferPoints, setErReferPoints] = useState<any[]>([]);
 
+  // Derive hospital ID for creation-point fetch reactively so we re-fetch
+  // when profile loads (authProfile) or when navbar hospital changes (optionHospital).
+  const profileHospitalId = (authProfile as any)?.permissionGroup?.hospital?.id;
+
   useEffect(() => {
-    const authState = useAuthStore.getState();
-    const profile: any = authState.profile;
     const hospitalId =
-      profile?.permissionGroup?.hospital?.id || optionHospital || searchParams.hospitalID || null;
+      profileHospitalId || optionHospital || searchParams.hospitalID || null;
     if (!hospitalId) return;
     (async () => {
       try {
@@ -740,7 +742,7 @@ export default function RequestReferralForm({
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, optionHospital]);
+  }, [kind, optionHospital, profileHospitalId]);
 
   useEffect(() => {
     const authState = useAuthStore.getState();
@@ -1841,8 +1843,100 @@ export default function RequestReferralForm({
                     </Table>
                   </TableContainer>
                 </>
+              ) : kind === "referBack" ? (
+                /* referBack — Nuxt style: simple numbered list, no table */
+                searchParams?.branch_names !== "false" && (
+                  <>
+                    <Box
+                      sx={{
+                        borderBottom: "2px solid #16a34a",
+                        mb: 2,
+                        pb: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: "#036245",
+                          fontSize: "1rem",
+                          fontWeight: 400,
+                          ml: 1,
+                        }}
+                      >
+                        สาขา/แผนกปลายทาง{" "}
+                        {searchParams?.isChangeDoctorBranch === "true" ? (
+                          <>
+                            (
+                            <Typography
+                              component="span"
+                              sx={{ color: "#f01000", fontSize: "0.875rem", fontWeight: 400 }}
+                            >
+                              ไม่อนุญาตให้ส่งต่อสาขาอื่น
+                            </Typography>
+                            )
+                          </>
+                        ) : (
+                          <>
+                            (
+                            <Typography
+                              component="span"
+                              sx={{ color: "#036245", fontSize: "0.875rem", fontWeight: 400 }}
+                            >
+                              อนุญาตให้ส่งต่อสาขาอื่น
+                            </Typography>
+                            )
+                          </>
+                        )}
+                      </Typography>
+                      <Tooltip
+                        title="สามารถพิจารณาปรับเปลี่ยนสาขาที่ส่งต่อ จากที่ต้นทางกำหนดมาได้ถ้าต้นทางอนุญาต"
+                        placement="top"
+                        arrow
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              fontSize: "1rem",
+                              lineHeight: 1.6,
+                              padding: "14px 18px",
+                              maxWidth: 460,
+                              bgcolor: "rgba(0,0,0,0.88)",
+                              fontWeight: 500,
+                            },
+                          },
+                          arrow: { sx: { color: "rgba(0,0,0,0.88)" } },
+                        }}
+                      >
+                        <IconButton size="small" sx={{ color: "#9ca3af" }}>
+                          <HelpOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    {/* Simple list matching Nuxt referOut form */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography sx={{ color: "#64748B", fontSize: "1rem", fontWeight: 500, ml: 1 }}>
+                        สาขา/แผนกที่ส่งต่อ
+                      </Typography>
+                      {branchList.length > 0 ? (
+                        branchList.map((branch: any) => (
+                          <Typography
+                            key={branch.index}
+                            sx={{ ml: 4, color: "#374151", fontSize: "1rem", lineHeight: 1.8 }}
+                          >
+                            {`${branch.index}.${branch.name}`}
+                          </Typography>
+                        ))
+                      ) : (
+                        <Typography sx={{ ml: 4, color: "#374151", fontSize: "1rem" }}>
+                          ไม่มีสาขาส่งต่อ
+                        </Typography>
+                      )}
+                    </Box>
+                  </>
+                )
               ) : (
-                /* referOut / referBack — matching Nuxt layout */
+                /* referOut — table layout with appointment columns */
                 searchParams?.branch_names !== "false" && (
                   <>
                     <Box

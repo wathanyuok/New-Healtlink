@@ -568,8 +568,44 @@ function OPDReferralInner() {
               endDelivery2: parseTime(dp.endDelivery),
             };
           }),
-          // Files
+          // Files — keep raw API format AND map to DocumentItem for TreatmentDocuments UI
           referralFiles: doc.referralFiles || [],
+          documents: (doc.referralFiles || [])
+            .filter((rf: any) => !rf.isDelete)
+            .map((rf: any, idx: number) => {
+              let formattedDate = "";
+              if (rf.createdAt) {
+                const d = new Date(rf.createdAt);
+                if (!isNaN(d.getTime())) {
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  const yyyy = d.getFullYear() + 543;
+                  const hh = String(d.getHours()).padStart(2, "0");
+                  const min = String(d.getMinutes()).padStart(2, "0");
+                  formattedDate = `${dd}/${mm}/${yyyy} ${hh}:${min} น.`;
+                }
+              }
+              return {
+                id: rf.id || idx,
+                fileName: rf.name || "",
+                fileType: rf.name || "",
+                docCode: rf.code || "",
+                docName: rf.name || "",
+                detail: rf.detail || "",
+                dateTime: formattedDate,
+                files: Array.isArray(rf.url)
+                  ? rf.url.map((f: any, fi: number) => ({
+                      id: fi,
+                      name: f.name || "",
+                      size: f.size || "",
+                      file: null as any,
+                      url: f.url || "",
+                    }))
+                  : typeof rf.url === "string" && rf.url
+                    ? [{ id: 0, name: rf.url.split("/").pop() || "file", size: "", file: null as any, url: rf.url }]
+                    : [],
+              };
+            }),
           // Draft references for RequestReferralForm
           _draftDoctor: doc.doctor?.id ? {
             id: doc.doctor.id,
@@ -985,8 +1021,49 @@ function OPDReferralInner() {
             drugs: formData.medicines || [],
           },
 
-          // Files
-          referralFiles: [],
+          // Files — merge existing referralFiles from draft + new documents added in form
+          // (matches Nuxt mergeReferralFilesForDraft)
+          referralFiles: [
+            // 1. Existing files from loaded draft/referInfo (already in API format)
+            ...(referInfo?.referralFiles || formData.referralFiles || []).map((doc: any) => ({
+              id: doc.id || null,
+              code: doc.code || undefined,
+              name: doc.name || undefined,
+              detail: doc.detail || undefined,
+              type: doc.type || undefined,
+              textContent: doc.textContent || undefined,
+              url: Array.isArray(doc.url) ? doc.url : [],
+              isDelete: doc.isDelete ?? false,
+              createdAt: doc.createdAt || "",
+              updatedAt: doc.updatedAt || "",
+              createdBy: doc.createdBy || "",
+              clinicName: doc.clinicName || null,
+            })),
+            // 2. New documents added via TreatmentDocuments form (DocumentItem → API format)
+            ...(formData.documents || [])
+              .filter((doc: any) => {
+                // Skip docs that already exist in referralFiles (avoid duplicates)
+                const existingIds = (referInfo?.referralFiles || formData.referralFiles || []).map((f: any) => f.id).filter(Boolean);
+                return !doc.id || !existingIds.includes(doc.id);
+              })
+              .map((doc: any) => ({
+                id: doc.id && typeof doc.id === "number" && doc.id > 0 && doc.id < 1000000 ? doc.id : null,
+                isDelete: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                createdBy: "currentUser",
+                code: doc.docCode || undefined,
+                name: doc.fileType || undefined,
+                detail: doc.detail || undefined,
+                url: (doc.files || []).map((f: any) => ({
+                  url: f.url || "",
+                  name: f.name || f.fileName || "",
+                  size: f.size || "",
+                })),
+                textContent: "",
+                clinicName: null,
+              })),
+          ],
         };
 
         // Debug payload can be re-enabled if needed

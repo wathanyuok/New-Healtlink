@@ -828,6 +828,7 @@ function RequestReferOutDetailPageInner() {
   // Detect if we are on /refer-out/in (uses referral-info / referral-info-ipd)
   // vs /request-refer-out/in (uses referral-request-info)
   const isReferOutRoute = pathname?.startsWith("/refer-out");
+  const isReferBackRoute = pathname?.startsWith("/refer-back");
 
   const { findOneReferral, findGroupCase, updateReferral, getPatientHistory } = useReferralStore();
   const { uploadFile } = useHospitalStore();
@@ -1219,7 +1220,7 @@ function RequestReferOutDetailPageInner() {
       </Dialog>
 
       {/* ── Header row ── */}
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: "24px" }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: "8px" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <IconButton
             onClick={() => router.back()}
@@ -1297,6 +1298,20 @@ function RequestReferOutDetailPageInner() {
         </Box>
       </Box>
 
+      {/* ── Breadcrumb ── */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mb: "24px" }}>
+        <Typography
+          sx={{ fontSize: "1rem", color: "#00AF75", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+          onClick={() => router.back()}
+        >
+          สร้างใบส่งตัว
+        </Typography>
+        <Typography sx={{ fontSize: "1rem", color: "#9CA3AF" }}>&gt;</Typography>
+        <Typography sx={{ fontSize: "1rem", color: "#00AF75" }}>
+          เลือกสถานพยาบาลปลายทาง
+        </Typography>
+      </Box>
+
       {/* ── Group Case Cards ── */}
       {sortedGroupDocs.length > 0 && (
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: "16px", mb: "16px" }}>
@@ -1364,7 +1379,7 @@ function RequestReferOutDetailPageInner() {
         {/* No. + Status life + History buttons */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: "12px" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Typography sx={{ fontSize: "1.5rem", fontWeight: 600, color: "#036245", lineHeight: "32px", fontFamily: "Sarabun, sans-serif", mr: "8px" }}>
+            <Typography sx={{ fontSize: "1.125rem", fontWeight: 600, color: "#036245", lineHeight: "28px", fontFamily: "Sarabun, sans-serif", mr: "8px" }}>
               {`No .${doc.runNumber || ""}`}
             </Typography>
             <Box
@@ -1477,7 +1492,7 @@ function RequestReferOutDetailPageInner() {
                 {/* Delivery period
                     - IPD/ER detail (IPD/ER on /refer-out) → bordered card, "ข้อมูลวันและเวลา", 2 cols, yellow bg
                     - OPD detail / OPD detail → "ระยะเวลารับรองสิทธิ์", 4 cols, กรุณาใช้สิทธิ์ */}
-                {deliveryPeriods.length > 0 && (() => {
+                {deliveryPeriods.length > 0 && doc.referralDeliveryPeriod != null && (() => {
 
                   const isIPDorERRoute = isReferOutRoute && (referralKindText === "IPD" || referralKindText === "EMERGENCY");
                   const periodId = doc.referralDeliveryPeriod?.id;
@@ -1665,6 +1680,8 @@ function RequestReferOutDetailPageInner() {
                           <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>จุดรับใบส่งตัว</Typography>
                           {doc.deliveryPointTypeEnd ? (
                             <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeEnd.name || "-"}</Typography>
+                          ) : isReferBackRoute ? (
+                            <Typography sx={{ ml: 2, fontSize: "1rem" }}>-</Typography>
                           ) : (
                             <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>รอตอบรับ</Typography>
                           )}
@@ -1681,6 +1698,8 @@ function RequestReferOutDetailPageInner() {
                           <Typography sx={{ fontSize: "1.125rem", fontWeight: 500, mt: 2, mb: "4px" }}>เบอร์ติดต่อจุดรับใบส่งตัว</Typography>
                           {doc.deliveryPointTypeEnd ? (
                             <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.deliveryPointTypeEnd.phone || "-"}</Typography>
+                          ) : isReferBackRoute ? (
+                            <Typography sx={{ ml: 2, fontSize: "1rem" }}>-</Typography>
                           ) : (
                             <Typography sx={{ ml: 2, color: "#EAB308", fontSize: "1rem" }}>รอตอบรับ</Typography>
                           )}
@@ -1692,6 +1711,88 @@ function RequestReferOutDetailPageInner() {
                     </Box>
                   );
                 })()}
+
+                {/* สาขา/แผนกปลายทาง — appointment table (matches Nuxt referral-info.vue) */}
+                {doc.appointmentData && doc.appointmentData.length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #036245", pb: 1, mb: 2 }}>
+                      <Typography component="div" sx={{ fontWeight: 400, fontSize: "1.125rem", color: "#036245" }}>
+                        สาขา/แผนกปลายทาง (
+                        <Typography component="span" sx={{
+                          fontSize: "0.875rem",
+                          fontWeight: 400,
+                          color: doc.isChangeDoctorBranch ? "#f01000" : "#036245",
+                        }}>
+                          {doc.isChangeDoctorBranch ? "ไม่อนุญาติให้ส่งต่อสาขาอื่น" : "อนุญาติให้ส่งต่อสาขาอื่น"}
+                        </Typography>
+                        )
+                      </Typography>
+                      <Tooltip
+                        title={
+                          <Box sx={{ p: 1 }}>
+                            <Typography sx={{ fontWeight: 700, fontSize: "0.875rem", mb: 1 }}>สาขา/แผนกปลายทาง</Typography>
+                            <Typography sx={{ fontSize: "0.8rem" }}>
+                              หากอนุญาติให้ส่งต่อสาขาอื่น สถานพยาบาลปลายทางสามารถเปลี่ยนแปลงสาขา/แผนกได้
+                            </Typography>
+                          </Box>
+                        }
+                        placement="top"
+                        arrow
+                        slotProps={{ tooltip: { sx: { maxWidth: 400, bgcolor: "#374151", p: 2 } } }}
+                      >
+                        <HelpOutlineIcon sx={{ color: "#9CA3AF", fontSize: 20, cursor: "pointer", "&:hover": { color: "#6B7280" } }} />
+                      </Tooltip>
+                    </Box>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                              ลำดับ
+                            </TableCell>
+                            <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                              สาขา/แผนกที่ส่งต่อ
+                            </TableCell>
+                            {doc.referralStatus?.name !== "รอตอบรับ" && (
+                              <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                วัน/เวลานัดหมาย
+                              </TableCell>
+                            )}
+                            {doc.referralStatus?.name !== "รอตอบรับ" && (
+                              <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
+                                หมายเหตุ
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {doc.appointmentData.map((item: any, index: number) => (
+                            <TableRow key={index} sx={{ borderBottom: "1px solid #f3f4f6" }}>
+                              <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                {index + 1}
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                {item.doctorBranchName || "-"}
+                              </TableCell>
+                              {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
+                                  {item.appointmentType === "รอนัดรักษาต่อเนื่อง"
+                                    ? "รอนัดรักษาต่อเนื่อง"
+                                    : fmtThaiDateTimeLocal(item.appointmentDate) || "-"}
+                                </TableCell>
+                              )}
+                              {doc.referralStatus?.name !== "รอตอบรับ" && (
+                                <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem", maxWidth: 200, wordBreak: "break-word" }}>
+                                  {item.remark || "-"}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                )}
 
                 {/* ข้อมูลผู้สร้างใบส่งตัว */}
                 <Box sx={{ mb: 2, mt: 2 }}>
@@ -1778,59 +1879,7 @@ function RequestReferOutDetailPageInner() {
                     <Typography sx={{ ml: 2, fontSize: "1rem" }}>{doc.referralStatusDetailCurrentText || "-"}</Typography>
                   </Box>
 
-                  {/* Appointment table — matches Nuxt referral-info.vue */}
-                  {doc.appointmentData && doc.appointmentData.length > 0 && (
-                    <Box sx={{ p: 2 }}>
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
-                                ลำดับ
-                              </TableCell>
-                              <TableCell sx={{ bgcolor: "#f9fafb", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
-                                สาขา/แผนกที่ส่งต่อ
-                              </TableCell>
-                              {doc.referralStatus?.name !== "รอตอบรับ" && (
-                                <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
-                                  วัน/เวลานัดหมาย
-                                </TableCell>
-                              )}
-                              {doc.referralStatus?.name !== "รอตอบรับ" && (
-                                <TableCell sx={{ bgcolor: "#FEFCE8", fontWeight: 500, fontSize: "1rem", color: "#64748B", fontFamily: "Sarabun, sans-serif" }}>
-                                  หมายเหตุ
-                                </TableCell>
-                              )}
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {doc.appointmentData.map((item: any, index: number) => (
-                              <TableRow key={index} sx={{ borderBottom: "1px solid #f3f4f6" }}>
-                                <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
-                                  {index + 1}
-                                </TableCell>
-                                <TableCell sx={{ fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
-                                  {item.doctorBranchName || "-"}
-                                </TableCell>
-                                {doc.referralStatus?.name !== "รอตอบรับ" && (
-                                  <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem" }}>
-                                    {item.appointmentType === "รอนัดรักษาต่อเนื่อง"
-                                      ? "รอนัดรักษาต่อเนื่อง"
-                                      : fmtThaiDateTimeLocal(item.appointmentDate) || "-"}
-                                  </TableCell>
-                                )}
-                                {doc.referralStatus?.name !== "รอตอบรับ" && (
-                                  <TableCell sx={{ bgcolor: "#FEFCE8", fontFamily: "Sarabun, sans-serif", fontSize: "1rem", maxWidth: 200, wordBreak: "break-word" }}>
-                                    {item.remark || "-"}
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </Box>
-                  )}
+                  {/* Appointment table moved to after ข้อมูลสถานพยาบาล — สาขา/แผนกปลายทาง section */}
                 </Box>
 
                 {/* ระดับความสำคัญ — conditional based on route + referralKind

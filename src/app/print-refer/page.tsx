@@ -410,7 +410,7 @@ function PrintReferPageInner() {
         </div>
         <div style={S.separator} />
 
-        {/* ICD-10 */}
+        {/* ICD-10: โรคหลัก */}
         <table style={S.table}>
           <thead><tr style={{ color: "#6b7280" }}><th style={S.th}>โรคหลักที่ต้องการให้รักษา (ICD-10)</th><th style={S.th}>ชื่อโรคภาษาไทย</th><th style={S.th}>ชื่อโรคภาษาอังกฤษ</th></tr></thead>
           <tbody>
@@ -418,12 +418,15 @@ function PrintReferPageInner() {
             : <tr><td style={{ ...S.td, textAlign: "center" }} colSpan={3}>-</td></tr>}
           </tbody>
         </table>
-        {icd10More.length > 0 && (
+
+        {/* ICD-10: โรคร่วม — force page break before so header is always visible */}
+        {icd10More.length > 0 && (<>
+          <div className="html2pdf__page-break" style={S.pageBreak} />
           <table style={S.table}>
             <thead><tr style={{ color: "#6b7280" }}><th style={S.th}>โรคร่วมที่ต้องการให้รักษา (ICD-10)</th><th style={S.th}>ชื่อโรคภาษาไทย</th><th style={S.th}>ชื่อโรคภาษาอังกฤษ</th></tr></thead>
             <tbody>{icd10More.map((item: any, i: number) => <tr key={i}><td style={S.td}>{i + 1}. {item.icd_10_tm || "-"}</td><td style={S.td}>{item.diagetname || "-"}</td><td style={S.td}>{item.diagename || "-"}</td></tr>)}</tbody>
           </table>
-        )}
+        </>)}
 
         {/* Medications */}
         <table style={{ ...S.table, borderTop: "1px solid #e5e7eb", marginBottom: "8px" }}>
