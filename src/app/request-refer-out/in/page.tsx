@@ -1107,8 +1107,9 @@ function RequestReferOutDetailPageInner() {
     .filter((h: any) => h.name);
 
   // Check if print button should show
-  // Show for any group case document as long as status is not "รอตอบรับ"
-  const shouldShowPrint = statusName &&
+  // Only on /refer-out and /refer-back (Nuxt: request-refer-out does NOT show print)
+  const shouldShowPrint = (isReferOutRoute || isReferBackRoute) &&
+    statusName &&
     statusName !== "รอตอบรับ";
 
   const lifeStatus = doc.referralLifeStatus || "มีชีวิต";
@@ -1298,19 +1299,21 @@ function RequestReferOutDetailPageInner() {
         </Box>
       </Box>
 
-      {/* ── Breadcrumb ── */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mb: "24px" }}>
-        <Typography
-          sx={{ fontSize: "1rem", color: "#00AF75", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
-          onClick={() => router.back()}
-        >
-          สร้างใบส่งตัว
-        </Typography>
-        <Typography sx={{ fontSize: "1rem", color: "#9CA3AF" }}>&gt;</Typography>
-        <Typography sx={{ fontSize: "1rem", color: "#00AF75" }}>
-          เลือกสถานพยาบาลปลายทาง
-        </Typography>
-      </Box>
+      {/* ── Breadcrumb — only on /refer-back (Nuxt: request-refer-out doesn't show) ── */}
+      {isReferBackRoute && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mb: "24px" }}>
+          <Typography
+            sx={{ fontSize: "1rem", color: "#00AF75", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+            onClick={() => router.back()}
+          >
+            สร้างใบส่งตัว
+          </Typography>
+          <Typography sx={{ fontSize: "1rem", color: "#9CA3AF" }}>&gt;</Typography>
+          <Typography sx={{ fontSize: "1rem", color: "#00AF75" }}>
+            เลือกสถานพยาบาลปลายทาง
+          </Typography>
+        </Box>
+      )}
 
       {/* ── Group Case Cards ── */}
       {sortedGroupDocs.length > 0 && (
@@ -1379,9 +1382,12 @@ function RequestReferOutDetailPageInner() {
         {/* No. + Status life + History buttons */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: "12px" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Typography sx={{ fontSize: "1.125rem", fontWeight: 600, color: "#036245", lineHeight: "28px", fontFamily: "Sarabun, sans-serif", mr: "8px" }}>
-              {`No .${doc.runNumber || ""}`}
-            </Typography>
+            {/* No. runNumber — only on /refer-out and /refer-back (Nuxt: request-refer-out doesn't show) */}
+            {(isReferOutRoute || isReferBackRoute) && (
+              <Typography sx={{ fontSize: "1.125rem", fontWeight: 600, color: "#036245", lineHeight: "28px", fontFamily: "Sarabun, sans-serif", mr: "8px" }}>
+                {`No .${doc.runNumber || ""}`}
+              </Typography>
+            )}
             <Box
               onClick={() => setLifeStatusModalOpen(true)}
               sx={{
