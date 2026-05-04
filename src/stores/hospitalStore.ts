@@ -163,8 +163,8 @@ export const useHospitalStore = create<HospitalStore>((set, get) => ({
     );
   },
 
-  getOptionRole: async () => {
-    return apiGet("auth-service/role/find");
+  getOptionRole: async (param?: any) => {
+    return apiGet("auth-service/role/find", param);
   },
 
   getOptionGroupPer: async (param?: any) => {

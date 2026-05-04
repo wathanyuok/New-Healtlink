@@ -371,14 +371,18 @@ export default function DeliveryPointSettingsPage() {
 
   /* ── Toggle isActive ── */
   const handleToggleActive = async (item: any) => {
+    // Optimistic update — flip locally first so the UI doesn't jump
+    setItems((prev) =>
+      prev.map((row) => (row.id === item.id ? { ...row, isActive: !row.isActive } : row))
+    );
     try {
-      setLoading(true);
       await deliveryStore.updateReferPoint(item.id, { isActive: !item.isActive });
-      refetch();
     } catch (err) {
       console.error("Error toggling active:", err);
-    } finally {
-      setLoading(false);
+      // Revert on failure
+      setItems((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, isActive: item.isActive } : row))
+      );
     }
   };
 
