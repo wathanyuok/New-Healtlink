@@ -491,7 +491,7 @@ export default function AddPermissionGroupPage() {
                     <TableRow
                       key={row.id}
                       hover
-                      sx={{ "&:nth-of-type(even)": { bgcolor: "#f0fdf4" } }}
+                      sx={{ bgcolor: row.menu_name?.startsWith("•") ? "#fff" : "#f0fdf4" }}
                     >
                       {/* เมนูที่เข้าถึงได้ */}
                       <TableCell>{row.menu_name}</TableCell>

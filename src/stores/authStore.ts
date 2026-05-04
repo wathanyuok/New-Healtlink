@@ -12,7 +12,15 @@ interface UserProfile {
       id: number;
       name: string;
     };
+    zone?: {
+      id: number;
+      name?: string;
+    };
     hospital?: {
+      id: number;
+      name?: string;
+    };
+    subType?: {
       id: number;
       name?: string;
     };

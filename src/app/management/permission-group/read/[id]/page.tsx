@@ -9,8 +9,6 @@ import {
   TableHead,
   TableRow,
   Typography,
-  Switch,
-  Radio,
   Tooltip,
   IconButton,
   CircularProgress,
@@ -19,6 +17,23 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import HomeIcon from "@mui/icons-material/Home";
+
+/* ── Inline SVG icons matching Nuxt base-check-permission ── */
+const CheckCircleFillIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <g fill="none">
+      <path d="m12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035q-.016-.005-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093q.019.005.029-.008l.004-.014l-.034-.614q-.005-.018-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z" />
+      <path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2m3.535 6.381l-4.95 4.95l-2.12-2.121a1 1 0 0 0-1.415 1.414l2.758 2.758a1.1 1.1 0 0 0 1.556 0l5.586-5.586a1 1 0 0 0-1.415-1.415" />
+    </g>
+  </svg>
+);
+
+const XCircleFillIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 256 256">
+    <path fill="currentColor" d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m37.66 130.34a8 8 0 0 1-11.32 11.32L128 139.31l-26.34 26.35a8 8 0 0 1-11.32-11.32L116.69 128l-26.35-26.34a8 8 0 0 1 11.32-11.32L128 116.69l26.34-26.35a8 8 0 0 1 11.32 11.32L139.31 128Z" />
+  </svg>
+);
 import { useRouter, useParams } from "next/navigation";
 import { usePermissionStore } from "@/stores/permissionStore";
 
@@ -231,27 +246,11 @@ export default function ReadPermissionGroupPage() {
               px: 2,
               py: 1.5,
               borderRadius: "8px 8px 0 0",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
             }}
           >
             <Typography sx={{ fontWeight: 700, color: "#166534", fontSize: "1.1rem" }}>
               ข้อมูลสิทธ์การเข้าถึง
             </Typography>
-            <Tooltip
-              title={
-                <Box sx={{ whiteSpace: "pre-line", p: 1, fontSize: "0.85rem" }}>
-                  {PERMISSION_TOOLTIP}
-                </Box>
-              }
-              arrow
-              placement="left"
-            >
-              <IconButton size="small">
-                <HelpOutlineIcon sx={{ color: "#6b7280" }} />
-              </IconButton>
-            </Tooltip>
           </Box>
           <Box sx={{ p: 2 }}>
             <TableContainer>
@@ -267,46 +266,53 @@ export default function ReadPermissionGroupPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {permissionRows.map((row) => {
-                    const hasAnyActive = row.active
-                      ? Object.values(row.active).some((v: any) => v?.active)
-                      : false;
-                    return (
+                  {permissionRows.map((row) => (
                     <TableRow
                       key={row.id}
-                      sx={{ bgcolor: hasAnyActive ? "#f0fdf4" : "#fff" }}
+                      sx={{ bgcolor: row.menu_name?.startsWith("•") ? "#fff" : "#f0fdf4" }}
                     >
                       <TableCell>{row.menu_name}</TableCell>
 
-                      {/* หน้าแรก — Radio (disabled) */}
+                      {/* หน้าแรก — Green circle home icon (matching Nuxt) */}
                       <TableCell align="center">
-                        <Radio
-                          size="small"
-                          checked={firstPage === String(row.firstPage?.[0]?.value)}
-                          disabled
-                          sx={{ color: "#00AF75", "&.Mui-checked": { color: "#00AF75" } }}
-                        />
+                        {firstPage === String(row.firstPage?.[0]?.value) ? (
+                          <Box
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: 32,
+                              height: 32,
+                              borderRadius: "50%",
+                              bgcolor: "#00AF75",
+                            }}
+                          >
+                            <HomeIcon sx={{ color: "#fff", fontSize: 18 }} />
+                          </Box>
+                        ) : null}
                       </TableCell>
 
-                      {/* Read / Create / Update / Delete — Switch (disabled) */}
+                      {/* Read / Create / Update / Delete — SVG icons matching Nuxt base-check-permission */}
                       {["Read", "Create", "Update", "Delete"].map((perm) => (
                         <TableCell key={perm} align="center">
                           {row.active?.[perm] !== undefined ? (
-                            <Switch
-                              size="small"
-                              checked={!!row.active[perm]?.active}
-                              disabled
+                            <Box
                               sx={{
-                                "& .MuiSwitch-switchBase.Mui-checked": { color: "#00AF75" },
-                                "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#00AF75" },
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: row.active[perm]?.active ? "#2FD897" : "#ef4444",
+                                width: 24,
+                                height: 24,
                               }}
-                            />
+                            >
+                              {row.active[perm]?.active ? <CheckCircleFillIcon /> : <XCircleFillIcon />}
+                            </Box>
                           ) : null}
                         </TableCell>
                       ))}
                     </TableRow>
-                  );
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </TableContainer>

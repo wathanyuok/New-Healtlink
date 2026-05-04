@@ -617,15 +617,11 @@ export default function EditPermissionGroupPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {permissionRows.map((row, idx) => {
-                    const hasAnyActive = row.active
-                      ? Object.values(row.active).some((v: any) => v?.active)
-                      : false;
-                    return (
+                  {permissionRows.map((row, idx) => (
                     <TableRow
                       key={row.id}
                       hover
-                      sx={{ bgcolor: hasAnyActive ? "#f0fdf4" : "#fff" }}
+                      sx={{ bgcolor: row.menu_name?.startsWith("•") ? "#fff" : "#f0fdf4" }}
                     >
                       <TableCell>{row.menu_name}</TableCell>
 
@@ -656,8 +652,7 @@ export default function EditPermissionGroupPage() {
                         </TableCell>
                       ))}
                     </TableRow>
-                  );
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </TableContainer>
