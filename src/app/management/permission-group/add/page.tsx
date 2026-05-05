@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import GreenSwitch from "@/components/common/GreenSwitch";
 import {
   Box,
   TextField,
@@ -13,7 +14,7 @@ import {
   Typography,
   Select,
   MenuItem,
-  Switch,
+  // Switch replaced by GreenSwitch
   Radio,
   RadioGroup,
   FormControlLabel,
@@ -510,14 +511,9 @@ export default function AddPermissionGroupPage() {
                       {["Read", "Create", "Update", "Delete"].map((perm) => (
                         <TableCell key={perm} align="center">
                           {row.active?.[perm] !== undefined ? (
-                            <Switch
-                              size="small"
+                            <GreenSwitch
                               checked={!!row.active[perm]?.active}
                               onChange={() => togglePermission(idx, perm)}
-                              sx={{
-                                "& .MuiSwitch-switchBase.Mui-checked": { color: "#00AF75" },
-                                "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#00AF75" },
-                              }}
                             />
                           ) : null}
                         </TableCell>

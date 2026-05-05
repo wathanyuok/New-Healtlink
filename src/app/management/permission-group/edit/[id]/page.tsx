@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import GreenSwitch from "@/components/common/GreenSwitch";
 import {
   Box,
   TextField,
@@ -13,7 +14,7 @@ import {
   Typography,
   Select,
   MenuItem,
-  Switch,
+  // Switch replaced by GreenSwitch
   Radio,
   Tooltip,
   IconButton,
@@ -533,46 +534,6 @@ export default function EditPermissionGroupPage() {
           </Box>
         )}
 
-        {/* ═══ Gray bar: จัดการสิทธิ์การเข้าถึงทั้งหมด ═══ */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            bgcolor: "#d1d5db",
-            borderRadius: 1,
-            px: 2.5,
-            py: 1.5,
-            mb: 2,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography sx={{ fontWeight: 700, color: "#374151", fontSize: "1rem" }}>
-              จัดการสิทธิ์การเข้าถึงทั้งหมด
-            </Typography>
-            {hasChanges && (
-              <Typography sx={{ color: "#6b7280", fontSize: "0.9rem" }}>
-                มีการเปลี่ยนแปลง
-              </Typography>
-            )}
-          </Box>
-          <Button
-            variant="outlined"
-            onClick={handleEnableAll}
-            disabled={savingAll}
-            startIcon={savingAll ? <CircularProgress size={16} /> : undefined}
-            sx={{
-              borderColor: "#9ca3af",
-              color: "#374151",
-              fontWeight: 600,
-              bgcolor: "#fff",
-              "&:hover": { borderColor: "#6b7280", bgcolor: "#f3f4f6" },
-            }}
-          >
-            เปิดสิทธิ์ทั้งหมด
-          </Button>
-        </Box>
-
         {/* ═══ Section: ข้อมูลสิทธ์การเข้าถึง ═══ */}
         <Box sx={{ border: "1px solid #e5e7eb", borderRadius: 2, mb: 3 }}>
           <Box
@@ -603,6 +564,48 @@ export default function EditPermissionGroupPage() {
               </IconButton>
             </Tooltip>
           </Box>
+
+          {/* ── Gray bar: จัดการสิทธิ์การเข้าถึงทั้งหมด ── */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              bgcolor: "#d1d5db",
+              mx: 2,
+              mt: 2,
+              borderRadius: 1,
+              px: 2.5,
+              py: 1.5,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography sx={{ fontWeight: 700, color: "#374151", fontSize: "1rem" }}>
+                จัดการสิทธิ์การเข้าถึงทั้งหมด
+              </Typography>
+              {hasChanges && (
+                <Typography sx={{ color: "#6b7280", fontSize: "0.9rem" }}>
+                  มีการเปลี่ยนแปลง
+                </Typography>
+              )}
+            </Box>
+            <Button
+              variant="outlined"
+              onClick={handleEnableAll}
+              disabled={savingAll}
+              startIcon={savingAll ? <CircularProgress size={16} /> : undefined}
+              sx={{
+                borderColor: "#9ca3af",
+                color: "#374151",
+                fontWeight: 600,
+                bgcolor: "#fff",
+                "&:hover": { borderColor: "#6b7280", bgcolor: "#f3f4f6" },
+              }}
+            >
+              เปิดสิทธิ์ทั้งหมด
+            </Button>
+          </Box>
+
           <Box sx={{ p: 2 }}>
             <TableContainer>
               <Table size="small">
@@ -639,14 +642,9 @@ export default function EditPermissionGroupPage() {
                       {["Read", "Create", "Update", "Delete"].map((perm) => (
                         <TableCell key={perm} align="center">
                           {row.active?.[perm] !== undefined ? (
-                            <Switch
-                              size="small"
+                            <GreenSwitch
                               checked={!!row.active[perm]?.active}
                               onChange={() => togglePermission(idx, perm)}
-                              sx={{
-                                "& .MuiSwitch-switchBase.Mui-checked": { color: "#00AF75" },
-                                "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#00AF75" },
-                              }}
                             />
                           ) : null}
                         </TableCell>

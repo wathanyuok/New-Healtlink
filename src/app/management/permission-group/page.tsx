@@ -24,7 +24,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import FindInPageIcon from "@mui/icons-material/FindInPage";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
@@ -455,15 +455,13 @@ export default function PermissionGroupPage() {
             <TableHead>
               <TableRow sx={{ bgcolor: "#036245" }}>
                 {[
-                  { label: "ลำดับ", width: "7%" },
-                  { label: "กลุ่มจัดการสิทธิ์", width: "18%" },
-                  { label: "ระดับบัญชี", width: "13%" },
-                  { label: "โซนสถานพยาบาล", width: "13%" },
+                  { label: "ลำดับ", width: "8%" },
+                  { label: "กลุ่มจัดการสิทธิ์", width: "22%" },
+                  { label: "ระดับบัญชี", width: "18%" },
+                  { label: "โซนสถานพยาบาล", width: "15%" },
                   { label: "สถานพยาบาล", width: "15%" },
                   { label: "ผู้ใช้งาน", width: "8%" },
-                  { label: "สร้างเมื่อ", width: "13%" },
-                  { label: "อัปเดตล่าสุด", width: "13%" },
-                  { label: "รายละเอียด", width: "12%" },
+                  { label: "รายละเอียด", width: "14%" },
                 ].map((col) => (
                   <TableCell
                     key={col.label}
@@ -483,13 +481,13 @@ export default function PermissionGroupPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     <CircularProgress size={32} sx={{ color: "#036245" }} />
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: "#9ca3af" }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: "#9ca3af" }}>
                     ไม่พบข้อมูล
                   </TableCell>
                 </TableRow>
@@ -513,7 +511,7 @@ export default function PermissionGroupPage() {
                       </Tooltip>
                     </TableCell>
                     <TableCell align="center">
-                      {item.role?.displayName || item.role?.name || item.name || "-"}
+                      {item.name || "ไม่มีประเภท"}
                     </TableCell>
                     <TableCell align="center">
                       {item.zone?.name || "-"}
@@ -528,12 +526,6 @@ export default function PermissionGroupPage() {
                     <TableCell align="center">
                       {item.userCount || "-"}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                      {formatThaiDateTime(item.createdAt)}
-                    </TableCell>
-                    <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                      {formatThaiDateTime(item.updatedAt)}
-                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         <IconButton
@@ -547,7 +539,7 @@ export default function PermissionGroupPage() {
                             "&:hover": { bgcolor: "#2563eb" },
                           }}
                         >
-                          <VisibilityIcon sx={{ fontSize: 16 }} />
+                          <FindInPageIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                         <IconButton
                           size="small"

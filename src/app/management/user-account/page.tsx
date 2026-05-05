@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import GreenSwitch from "@/components/common/GreenSwitch";
 import {
   Box,
   TextField,
@@ -15,7 +16,7 @@ import {
   IconButton,
   Typography,
   CircularProgress,
-  Switch,
+  // Switch replaced by GreenSwitch
   Dialog,
   DialogTitle,
   DialogContent,
@@ -681,14 +682,9 @@ export default function UserAccountPage() {
 
                             {/* การใช้งานบัญชี (toggle) */}
                             {h.Name === "การใช้งานบัญชี" && (
-                              <Switch
-                                size="small"
+                              <GreenSwitch
                                 checked={toggleStates[item.id] ?? false}
                                 onChange={(e) => handleToggle(item, e.target.checked)}
-                                sx={{
-                                  "& .MuiSwitch-switchBase.Mui-checked": { color: "#00AF75" },
-                                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#00AF75" },
-                                }}
                               />
                             )}
 

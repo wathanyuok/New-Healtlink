@@ -18,6 +18,12 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
@@ -25,7 +31,8 @@ import LockResetIcon from "@mui/icons-material/LockReset";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import { useRouter, useParams } from "next/navigation";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useUserStore } from "@/stores/userStore";
 import { useHospitalStore } from "@/stores/hospitalStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -40,12 +47,16 @@ const selectSx = {
 };
 const dropdownMenuProps = { PaperProps: { sx: { maxHeight: 240 } } };
 
-/* ── Render placeholder for empty Select ── */
-const renderPlaceholder = (placeholder: string) => (selected: any) => {
+/* ── Render Select value: show placeholder when empty, lookup name when selected ── */
+const renderSelectValue = (placeholder: string, options?: { value: any; name: string }[]) => (selected: any) => {
   if (selected === "" || selected === undefined || selected === null) {
     return <span style={{ color: "#9ca3af" }}>{placeholder}</span>;
   }
-  return undefined;
+  if (options) {
+    const found = options.find((o) => o.value === selected);
+    if (found) return found.name;
+  }
+  return String(selected);
 };
 
 /* ── TextField border style ── */
@@ -84,10 +95,65 @@ const PREFIX_OPTIONS = [
 /* ── General positions that don't require license number ── */
 const GENERAL_POSITIONS = ["AUDITOR", "GENERAL", "PUBLIC_HEALTH_OFFICER"];
 
+/* ── Permission menu definitions (same as dataSetManagePermission.json) ── */
+interface MenuPermission {
+  id: number;
+  name: string;
+  menu_name: string;
+  active: Record<string, { id: number; active: boolean }>;
+}
+const DATA_PERMISSIONS: MenuPermission[] = [
+  { id: 101, name: "dashboard_read", menu_name: "Dashboard", active: { Read: { id: 101, active: true } } },
+  { id: 102, name: "followDelivery_read", menu_name: "ติดตามการส่งตัว", active: { Read: { id: 148, active: true } } },
+  { id: 103, name: "createReferral_read", menu_name: "สร้างใบส่งตัว", active: { Read: { id: 149, active: true } } },
+  { id: 104, name: "referOut_all_read", menu_name: "ส่งผู้ป่วยออก (Refer Out) - (Tab ทั้งหมด)", active: { Read: { id: 150, active: true } } },
+  { id: 105, name: "referOut_opd_read", menu_name: "• ส่งผู้ป่วยออก OPD (Tab)", active: { Read: { id: 102, active: true }, Create: { id: 103, active: true }, Update: { id: 104, active: true } } },
+  { id: 106, name: "referOut_er_read", menu_name: "• ส่งผู้ป่วยออก Emergency (Tab)", active: { Read: { id: 152, active: true }, Create: { id: 153, active: true }, Update: { id: 154, active: true } } },
+  { id: 107, name: "referOut_ipd_read", menu_name: "• ส่งผู้ป่วยออก IPD (Tab)", active: { Read: { id: 155, active: true }, Create: { id: 156, active: true }, Update: { id: 157, active: true } } },
+  { id: 108, name: "referIn_all_read", menu_name: "รับผู้ป่วยเข้า (Refer In) - (Tab ทั้งหมด)", active: { Read: { id: 158, active: true } } },
+  { id: 109, name: "referIn_opd_read", menu_name: "• รับผู้ป่วยเข้า OPD  (Tab)", active: { Read: { id: 105, active: true }, Create: { id: 106, active: true }, Update: { id: 107, active: true } } },
+  { id: 110, name: "referIn_er_read", menu_name: "• รับผู้ป่วยเข้า Emergency (Tab)", active: { Read: { id: 159, active: true }, Create: { id: 160, active: true }, Update: { id: 161, active: true } } },
+  { id: 111, name: "referIn_ipd_read", menu_name: "• รับผู้ป่วยเข้า IPD (Tab)", active: { Read: { id: 162, active: true }, Create: { id: 163, active: true }, Update: { id: 164, active: true } } },
+  { id: 112, name: "referBack_all_read", menu_name: "ส่งตัวกลับ (Refer Back) - (Tab ทั้งหมด)", active: { Read: { id: 165, active: true } } },
+  { id: 113, name: "refeBack_opd_read", menu_name: "• ส่งตัวกลับ OPD  (Tab)", active: { Read: { id: 108, active: true }, Create: { id: 109, active: true }, Update: { id: 110, active: true } } },
+  { id: 114, name: "referBack_er_read", menu_name: "• ส่งตัวกลับ Emergency (Tab)", active: { Read: { id: 166, active: true }, Create: { id: 167, active: true }, Update: { id: 168, active: true } } },
+  { id: 115, name: "referBack_ipd_read", menu_name: "• ส่งตัวกลับ IPD (Tab)", active: { Read: { id: 169, active: true }, Create: { id: 170, active: true }, Update: { id: 171, active: true } } },
+  { id: 116, name: "referReceive_all_read", menu_name: "รับตัวกลับ - (Tab ทั้งหมด)", active: { Read: { id: 172, active: true } } },
+  { id: 117, name: "referReceive_opd_read", menu_name: "• รับตัวกลับ OPD (Tab)", active: { Read: { id: 179, active: true }, Create: { id: 180, active: true }, Update: { id: 181, active: true } } },
+  { id: 118, name: "referReceive_er_read", menu_name: "• รับตัวกลับ Emergency (Tab)", active: { Read: { id: 173, active: true }, Create: { id: 174, active: true }, Update: { id: 175, active: true } } },
+  { id: 119, name: "referReceive_ipd_read", menu_name: "• รับตัวกลับ IPD (Tab)", active: { Read: { id: 176, active: true }, Create: { id: 177, active: true }, Update: { id: 178, active: true } } },
+  { id: 120, name: "referRequest_all_read", menu_name: "ร้องขอส่งตัว (Tab ทั้งหมด)", active: { Read: { id: 182, active: true } } },
+  { id: 121, name: "referRequest_opd_read", menu_name: "• ร้องขอส่งตัว OPD (Tab)", active: { Read: { id: 111, active: true }, Create: { id: 112, active: true }, Update: { id: 113, active: true } } },
+  { id: 122, name: "word_referRequest_all_read", menu_name: "คำขอส่งตัว (Tab ทั้งหมด)", active: { Read: { id: 183, active: true } } },
+  { id: 123, name: "word_referRequest_opd_read", menu_name: "• คำขอส่งตัว OPD (Tab)", active: { Read: { id: 114, active: true }, Create: { id: 115, active: true }, Update: { id: 116, active: true } } },
+  { id: 124, name: "view_treatment_history", menu_name: "ประวัติการเข้าดูข้อมูลผู้ป่วย", active: { Read: { id: 117, active: true } } },
+  { id: 125, name: "loginHistory_read", menu_name: "ประวัติการเข้าใช้งานระบบ", active: { Read: { id: 118, active: true } } },
+  { id: 126, name: "permissionGroup_read", menu_name: "จัดการกลุ่มสิทธิ์", active: { Read: { id: 184, active: true }, Create: { id: 185, active: true }, Update: { id: 186, active: true }, Delete: { id: 187, active: true } } },
+  { id: 127, name: "user_read", menu_name: "จัดการบัญชีผู้ใช้งาน", active: { Read: { id: 122, active: true }, Create: { id: 123, active: true }, Update: { id: 124, active: true }, Delete: { id: 125, active: true } } },
+  { id: 128, name: "settingHospital_read", menu_name: "ตั้งค่าสถานพยาบาล", active: { Read: { id: 127, active: true }, Create: { id: 128, active: true }, Update: { id: 129, active: true }, Delete: { id: 130, active: true } } },
+  { id: 129, name: "settingZoneType_read", menu_name: "• ปุ่มจัดการประเภทและโซนสถานพยาบาล", active: { Read: { id: 131, active: true }, Create: { id: 132, active: true }, Update: { id: 133, active: true }, Delete: { id: 134, active: true } } },
+  { id: 130, name: "settingReferPoint_read", menu_name: "จุดรับ-ส่งตัวผู้ป่วย", active: { Read: { id: 135, active: true }, Create: { id: 136, active: true }, Update: { id: 137, active: true }, Delete: { id: 138, active: true } } },
+  { id: 131, name: "doctorBranch_read", menu_name: "สาขา/แผนกที่ส่งต่อ", active: { Read: { id: 139, active: true }, Create: { id: 140, active: true }, Update: { id: 141, active: true }, Delete: { id: 142, active: true } } },
+  { id: 132, name: "settingDefault_read", menu_name: "ตั้งค่าเริ่มต้น (Default)", active: { Read: { id: 192, active: true }, Create: { id: 193, active: true }, Update: { id: 194, active: true }, Delete: { id: 195, active: true } } },
+  { id: 133, name: "referStatusDetail_read", menu_name: "เหตุผล", active: { Read: { id: 196, active: true }, Create: { id: 197, active: true }, Update: { id: 198, active: true }, Delete: { id: 199, active: true } } },
+  { id: 134, name: "referCause_create", menu_name: "สาเหตุ", active: { Read: { id: 143, active: true }, Create: { id: 144, active: true }, Update: { id: 145, active: true }, Delete: { id: 146, active: true } } },
+];
+const HIGHLIGHT_MENUS = [
+  "Dashboard", "ติดตามการส่งตัว", "สร้างใบส่งตัว",
+  "ส่งผู้ป่วยออก (Refer Out) - (Tab ทั้งหมด)", "รับผู้ป่วยเข้า (Refer In) - (Tab ทั้งหมด)",
+  "ส่งตัวกลับ (Refer Back) - (Tab ทั้งหมด)", "รับตัวกลับ - (Tab ทั้งหมด)",
+  "ร้องขอส่งตัว (Tab ทั้งหมด)", "คำขอส่งตัว (Tab ทั้งหมด)",
+  "ประวัติการเข้าดูข้อมูลผู้ป่วย", "ประวัติการเข้าใช้งานระบบ",
+  "จัดการกลุ่มสิทธิ์", "จัดการบัญชีผู้ใช้งาน", "ตั้งค่าสถานพยาบาล",
+  "จุดรับ-ส่งตัวผู้ป่วย", "สาขา/แผนกที่ส่งต่อ", "ตั้งค่าเริ่มต้น (Default)", "สาเหตุ", "เหตุผล",
+];
+
 export default function EditUserAccountPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const isEditRead = searchParams.get("permissions") === "true";
   const userStore = useUserStore();
   const hospitalStore = useHospitalStore();
   const authStore = useAuthStore();
@@ -146,6 +212,9 @@ export default function EditUserAccountPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+
+  /* ── Permission table state (shown when ?permissions=true) ── */
+  const [userPermissions, setUserPermissions] = useState<any[]>([]);
 
   /* ── isGeneralPosition check (from Nuxt) ── */
   const isGeneralPosition = GENERAL_POSITIONS.includes(position);
@@ -308,8 +377,12 @@ export default function EditUserAccountPage() {
         ]);
 
         // Step 2: Load user data
-        const user = await userStore.getDataUserById(id);
-        if (!user) {
+        const res = await userStore.getDataUserById(id);
+        // Backend may return { user: {...} } or { data: { user: {...} } } or the user object directly
+        const user = res?.user || res?.data?.user || res?.data || res;
+        console.log("[Edit] getDataUserById response:", res);
+        console.log("[Edit] Extracted user:", user);
+        if (!user || !user.username) {
           setError("ไม่สามารถค้นหาข้อมูลผู้ใช้");
           setInitializing(false);
           isLoadingUserProfile.current = false;
@@ -349,6 +422,12 @@ export default function EditUserAccountPage() {
           await loadGroupsForRadio(userRoleId, roles, userZoneId, userTypeId, userHospitalId);
         }
         if (userGroupId) setSelectedGroup(userGroupId);
+
+        // Extract permissions for the permission table (when ?permissions=true)
+        if (isEditRead && user.permissionGroup?.mapPermissions) {
+          const perms = user.permissionGroup.mapPermissions.map((p: any) => p.permission);
+          setUserPermissions(perms);
+        }
 
         // For superAdminHospital, load groups immediately
         if (roleName === "superAdminHospital") {
@@ -694,7 +773,7 @@ export default function EditUserAccountPage() {
                         value={prefix}
                         onChange={(e) => { setPrefix(e.target.value); setCustomPrefix(""); }}
                         displayEmpty
-                        renderValue={renderPlaceholder("กรุณาเลือกคำนำหน้า")}
+                        renderValue={renderSelectValue("กรุณาเลือกคำนำหน้า", PREFIX_OPTIONS)}
                         sx={selectSx}
                         MenuProps={dropdownMenuProps}
                       >
@@ -747,7 +826,7 @@ export default function EditUserAccountPage() {
                       value={position}
                       onChange={(e) => setPosition(e.target.value)}
                       displayEmpty
-                      renderValue={renderPlaceholder("ตำแหน่งเจ้าหน้าที่")}
+                      renderValue={renderSelectValue("ตำแหน่งเจ้าหน้าที่", POSITION_OPTIONS)}
                       sx={selectSx}
                       MenuProps={dropdownMenuProps}
                     >
@@ -843,7 +922,7 @@ export default function EditUserAccountPage() {
                     <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                       กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                     </Typography>
-                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                       {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                     </Select>
                   </FormControl>
@@ -861,7 +940,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         โซนสถานพยาบาล <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedZone} onChange={(e) => handleZoneChange(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกโซนสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedZone} onChange={(e) => handleZoneChange(e.target.value as any)} displayEmpty renderValue={renderSelectValue("กรุณาเลือกโซนสถานพยาบาล", zoneOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {zoneOptions.map((z) => (<MenuItem key={z.value} value={z.value}>{z.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -874,7 +953,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedZone} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedZone} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -894,7 +973,7 @@ export default function EditUserAccountPage() {
                         <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                           โซนสถานพยาบาล <span style={{ color: "red" }}>*</span>
                         </Typography>
-                        <Select value={selectedZone} onChange={(e) => handleZoneChange(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกโซนสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                        <Select value={selectedZone} onChange={(e) => handleZoneChange(e.target.value as any)} displayEmpty renderValue={renderSelectValue("กรุณาเลือกโซนสถานพยาบาล", zoneOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                           {zoneOptions.map((z) => (<MenuItem key={z.value} value={z.value}>{z.name}</MenuItem>))}
                         </Select>
                       </FormControl>
@@ -902,7 +981,7 @@ export default function EditUserAccountPage() {
                         <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                           ประเภทสถานพยาบาล <span style={{ color: "red" }}>*</span>
                         </Typography>
-                        <Select value={selectedType} onChange={(e) => handleTypeChange(e.target.value as any)} disabled={!selectedZone} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกประเภทสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                        <Select value={selectedType} onChange={(e) => handleTypeChange(e.target.value as any)} disabled={!selectedZone} displayEmpty renderValue={renderSelectValue("กรุณาเลือกประเภทสถานพยาบาล", typeOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                           {typeOptions.map((t) => (<MenuItem key={t.value} value={t.value}>{t.name}</MenuItem>))}
                         </Select>
                       </FormControl>
@@ -911,7 +990,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         สถานพยาบาล <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedHospital} onChange={(e) => handleHospitalChange(e.target.value as any)} disabled={!selectedType} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedHospital} onChange={(e) => handleHospitalChange(e.target.value as any)} disabled={!selectedType} displayEmpty renderValue={renderSelectValue("กรุณาเลือกสถานพยาบาล", hospitalOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {hospitalOptions.map((h) => (<MenuItem key={h.value} value={h.value}>{h.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -924,7 +1003,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedHospital} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedHospital} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -942,7 +1021,7 @@ export default function EditUserAccountPage() {
                     <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                       กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                     </Typography>
-                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                       {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                     </Select>
                   </FormControl>
@@ -960,7 +1039,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         ประเภทสถานพยาบาล <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedType} onChange={(e) => handleTypeChange(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกประเภทสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedType} onChange={(e) => handleTypeChange(e.target.value as any)} displayEmpty renderValue={renderSelectValue("กรุณาเลือกประเภทสถานพยาบาล", typeOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {typeOptions.map((t) => (<MenuItem key={t.value} value={t.value}>{t.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -968,7 +1047,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         สถานพยาบาล <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedHospital} onChange={(e) => handleHospitalChange(e.target.value as any)} disabled={!selectedType} displayEmpty renderValue={renderPlaceholder("กรุณาเลือกสถานพยาบาล")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedHospital} onChange={(e) => handleHospitalChange(e.target.value as any)} disabled={!selectedType} displayEmpty renderValue={renderSelectValue("กรุณาเลือกสถานพยาบาล", hospitalOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {hospitalOptions.map((h) => (<MenuItem key={h.value} value={h.value}>{h.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -981,7 +1060,7 @@ export default function EditUserAccountPage() {
                       <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                         กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                       </Typography>
-                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedHospital} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                      <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} disabled={!selectedHospital} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                         {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                       </Select>
                     </FormControl>
@@ -999,10 +1078,79 @@ export default function EditUserAccountPage() {
                     <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: "#374151" }}>
                       กลุ่มสิทธิ์การใช้งาน <span style={{ color: "red" }}>*</span>
                     </Typography>
-                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderPlaceholder("เลือกกลุ่มสิทธิ์การใช้งาน")} sx={selectSx} MenuProps={dropdownMenuProps}>
+                    <Select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value as any)} displayEmpty renderValue={renderSelectValue("เลือกกลุ่มสิทธิ์การใช้งาน", groupOptions)} sx={selectSx} MenuProps={dropdownMenuProps}>
                       {groupOptions.map((g) => (<MenuItem key={g.value} value={g.value}>{g.name}</MenuItem>))}
                     </Select>
                   </FormControl>
+                </Box>
+              </SectionCard>
+            )}
+
+            {/* ── Permission table (shown when ?permissions=true, matching Nuxt) ── */}
+            {isEditRead && (
+              <SectionCard>
+                <Box sx={{ background: "linear-gradient(135deg, #c6f6d5, #e6fffa)", px: 2, py: 1.5 }}>
+                  <Typography sx={{ fontSize: "18px", fontWeight: 600, color: "#047857" }}>
+                    ข้อมูลสิทธ์การเข้าถึง
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 2 }}>
+                <TableContainer>
+                  <Table size="small" sx={{ border: "1px solid #e5e7eb" }}>
+                    <TableHead>
+                      <TableRow
+                        sx={{
+                          bgcolor: "#1f5c45",
+                          "& th": {
+                            color: "white",
+                            fontWeight: 600,
+                            fontSize: "14px",
+                            borderRight: "1px solid rgba(255,255,255,0.2)",
+                            py: 1.5,
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ width: "40%" }}>เมนูที่เข้าถึงได้</TableCell>
+                        <TableCell align="center" sx={{ width: "12%" }}>หน้าแรก</TableCell>
+                        <TableCell align="center" sx={{ width: "12%" }}>Read</TableCell>
+                        <TableCell align="center" sx={{ width: "12%" }}>Create</TableCell>
+                        <TableCell align="center" sx={{ width: "12%" }}>Update</TableCell>
+                        <TableCell align="center" sx={{ width: "12%" }}>Delete</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {DATA_PERMISSIONS.map((menu) => {
+                        const isHighlight = HIGHLIGHT_MENUS.includes(menu.menu_name);
+                        return (
+                          <TableRow
+                            key={menu.id}
+                            sx={{
+                              bgcolor: isHighlight ? "#f0fdf4" : "white",
+                              "&:hover": { bgcolor: "#f0fdf4" },
+                              "& td": {
+                                borderRight: "1px solid #e5e7eb",
+                                borderBottom: "1px solid #e5e7eb",
+                                py: 1,
+                                fontSize: "14px",
+                              },
+                            }}
+                          >
+                            <TableCell>{menu.menu_name}</TableCell>
+                            <TableCell align="center" />
+                            {(["Read", "Create", "Update", "Delete"] as const).map((type) => (
+                              <TableCell key={type} align="center">
+                                {menu.active[type] !== undefined &&
+                                  userPermissions.some((p: any) => p.id === menu.active[type]?.id) && (
+                                    <CheckCircleIcon sx={{ color: "#4ade80", fontSize: 24 }} />
+                                  )}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
                 </Box>
               </SectionCard>
             )}

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import GreenSwitch from "@/components/common/GreenSwitch";
 import {
   Box,
   TextField,
@@ -22,7 +23,7 @@ import {
   DialogActions,
   InputAdornment,
   Pagination,
-  Switch,
+  // Switch replaced by GreenSwitch
   Checkbox,
   FormControlLabel,
   FormGroup,
@@ -154,16 +155,10 @@ const PatientStatusIcons = ({ isOpd, isIpd, isEr }: { isOpd: boolean; isIpd: boo
       { label: "OPD", active: isOpd },
       { label: "IPD", active: isIpd },
       { label: "ER", active: isEr },
-    ].map((p) => (
+    ].filter((p) => p.active).map((p) => (
       <Box key={p.label} sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
-        {p.active ? (
-          <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} />
-        ) : (
-          <Box sx={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Box sx={{ width: 10, height: 2, bgcolor: "#d1d5db", borderRadius: 1 }} />
-          </Box>
-        )}
-        <Typography variant="caption" sx={{ color: p.active ? "#111827" : "#9ca3af", fontSize: "0.8rem" }}>
+        <CheckCircleIcon sx={{ color: "#22c55e", fontSize: 18 }} />
+        <Typography variant="caption" sx={{ color: "#111827", fontSize: "0.8rem" }}>
           {p.label}
         </Typography>
       </Box>
@@ -1046,14 +1041,9 @@ export default function DeliveryPointSettingsPage() {
                       <PatientStatusIcons isOpd={!!item.isOpd} isIpd={!!item.isIpd} isEr={!!item.isEr} />
                     </TableCell>
                     <TableCell>
-                      <Switch
+                      <GreenSwitch
                         checked={!!item.isActive}
                         onChange={() => handleToggleActive(item)}
-                        size="small"
-                        sx={{
-                          "& .MuiSwitch-switchBase.Mui-checked": { color: "#22c55e" },
-                          "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#22c55e" },
-                        }}
                       />
                     </TableCell>
                     <TableCell>

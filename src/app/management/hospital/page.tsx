@@ -519,11 +519,11 @@ export default function HospitalPage() {
                             size="small"
                             onClick={() => router.push(`/management/hospital/read/${item.id}`)}
                             sx={{
-                              bgcolor: "#00AF75",
+                              bgcolor: "#3b82f6",
                               color: "#fff",
                               width: 36,
                               height: 36,
-                              "&:hover": { bgcolor: "#009966" },
+                              "&:hover": { bgcolor: "#2563eb" },
                             }}
                           >
                             <ReadIcon />
