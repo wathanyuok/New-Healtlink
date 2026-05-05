@@ -131,7 +131,7 @@ export default function SystemUsageHistoryPage() {
     try {
       const [hospitalRes, roleRes] = await Promise.all([
         hospitalStore.getOptionHospital({ offset: 1, limit: 10000 }),
-        hospitalStore.getOptionRole({ offset: 1, limit: 10000, search: "" }),
+        hospitalStore.getOptionRole(),
       ]);
       setHospitalOptions(hospitalRes?.hospitals || []);
       // API returns { roles: [...] } from auth-service/role/findAndCount
